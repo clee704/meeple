@@ -1,0 +1,38 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --check
+        language: system
+        types: [python]
+
+      - id: vulture
+        name: vulture (dead code)
+        entry: uv run vulture meeple
+        language: system
+        pass_filenames: false
+
+      - id: deptry
+        name: deptry (unused deps)
+        entry: uv run deptry .
+        language: system
+        pass_filenames: false
+
+      - id: import-linter
+        name: import-linter (seam contract)
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+
+      - id: pytest
+        name: pytest (+ coverage gate)
+        entry: uv run pytest
+        language: system
+        pass_filenames: false
