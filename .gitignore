@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+.venv/
+.python-version.local
+
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# checkpoints / run artifacts (CLAUDE.md hygiene: keep tagged checkpoints out of git)
+checkpoints/
+runs/
+
+.env
+.DS_Store
+.idea/
+.vscode/
