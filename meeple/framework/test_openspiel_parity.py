@@ -1,6 +1,7 @@
-"""Cross-checks the native Kuhn engine against OpenSpiel's `kuhn_poker` (the
-oracle, CLAUDE.md G6) over every deal and betting sequence: PLAN.md Phase 1's
-done-when is "native and OpenSpiel agree on returns over many seeded games."
+"""Cross-checks the native Kuhn engine against OpenSpiel's `kuhn_poker` (used
+only as an oracle here, never as a game backend) over every deal and betting
+sequence, so the from-scratch engine is provably correct against a trusted
+reference implementation.
 
 Both engines deal cards 0=J/1=Q/2=K; OpenSpiel resolves the deal as two
 sequential chance nodes (one card per player), while the native engine uses

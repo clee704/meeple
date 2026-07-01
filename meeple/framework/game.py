@@ -1,4 +1,6 @@
-"""The game-agnostic interface every engine implements (CLAUDE.md G2 — the seam)."""
+"""The game-agnostic interface every engine implements. AI, eval, and web code
+should depend only on this module (plus `spec.py`/`registry.py`) to reach a
+game — never on a specific game's package."""
 
 from abc import ABC, abstractmethod
 
@@ -45,7 +47,7 @@ class State(ABC):
 
 class Game(ABC):
     """A factory for initial states plus the static `GameSpec` that drives
-    solver selection (CLAUDE.md's solver-compatibility matrix)."""
+    which solver (heuristic, MCTS, ISMCTS, CFR, ...) is compatible with it."""
 
     @abstractmethod
     def new_initial_state(self) -> State: ...

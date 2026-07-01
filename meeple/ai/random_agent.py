@@ -1,5 +1,6 @@
-"""Baseline agent: picks uniformly among legal actions. Used to smoke-test the
-seam (Phase 1) and as the eval harness's weakest opponent (CLAUDE.md G5)."""
+"""Baseline agent: picks uniformly among legal actions. Used to smoke-test new
+`Game`/`State` implementations end-to-end, and as the eval harness's weakest
+opponent — every other agent must beat this decisively."""
 
 import random
 

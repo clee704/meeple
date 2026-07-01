@@ -1,6 +1,6 @@
 # <GAME NAME> — Rules contract
 
-> **This document is a HARD GATE (CLAUDE.md G1).** No engine code may be written
+> **This document is a hard gate.** No engine code may be written
 > for this game until this file is complete, every rule is cited, all
 > `MUST-VERIFY` items are resolved, and the human sign-off below is checked.
 > Do **not** fill this in from memory — cite a real source for every rule.

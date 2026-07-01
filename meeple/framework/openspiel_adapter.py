@@ -1,8 +1,8 @@
 """Wraps an OpenSpiel game behind the `Game`/`State` interface.
 
-Oracle-only (CLAUDE.md G6): used to cross-check native engines (e.g. Kuhn) in
-tests, never as a game backend for play/eval/web. `open-spiel` is an optional
-dependency — import this module lazily, only where the cross-check happens.
+Oracle-only: used to cross-check native engines (e.g. Kuhn) in tests, never
+as a game backend for play/eval/web. `open-spiel` is an optional dependency —
+import this module lazily, only where the cross-check happens.
 """
 
 import pyspiel

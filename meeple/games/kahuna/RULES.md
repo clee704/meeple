@@ -1,9 +1,9 @@
 # Kahuna — Rules contract
 
-> HARD GATE (CLAUDE.md G1). Most rules below are verified against the sources
-> cited. **Three items remain `MUST-VERIFY` and BLOCK engine coding** — resolve
-> them against the physical rulebook before implementing `legal_actions` /
-> scoring.
+> **This document is a hard gate.** Most rules below are verified against the
+> sources cited. **Three items remain `MUST-VERIFY` and BLOCK engine coding** —
+> resolve them against the physical rulebook before implementing
+> `legal_actions` / scoring.
 
 ## Status
 
@@ -100,7 +100,7 @@ where `P = #bridge_pos`. `legal_actions` filters by: line free + you hold a
 required card (place); opponent owns that bridge + you hold required card(s)
 (remove); `end_turn` always legal.
 
-## Information-state tensor (for Deep CFR — Phase 8)
+## Information-state tensor (for Deep CFR)
 
 per-bridge owner (3×P) · per-island control + degree + my/opp bridge counts ·
 my hand counts per island (12) · **public face-up cards** (12) · cards

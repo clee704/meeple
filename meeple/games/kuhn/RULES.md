@@ -1,6 +1,6 @@
 # Kuhn Poker — Rules contract
 
-> **This document is a HARD GATE (CLAUDE.md G1).** No engine code may be written
+> **This document is a hard gate.** No engine code may be written
 > for this game until this file is complete, every rule is cited, all
 > `MUST-VERIFY` items are resolved, and the human sign-off below is checked.
 > Do **not** fill this in from memory — cite a real source for every rule.
@@ -8,7 +8,7 @@
 ## Status
 
 - **State:** VERIFIED *(textbook game with one fixed, unambiguous rule set —
-  no open questions; sign-off still required per G1)*
+  no open questions; sign-off is still required before engine code is written)*
 - **Human verified:** [ ]  — name / date: ____________________
 - **Sources** (≥2 authoritative; the official rulebook is mandatory):
   1. Kuhn, H.W. (1950), "A Simplified Two-Person Poker", *Contributions to the
@@ -16,7 +16,8 @@
      University Press, pp. 97–103. (Original definition.)
   2. OpenSpiel game documentation — `kuhn_poker`:
      https://github.com/google-deepmind/open_spiel/blob/master/open_spiel/games/kuhn_poker/kuhn_poker.h
-     (Reference implementation used as this project's oracle, CLAUDE.md G6.)
+     (Reference implementation used as this project's cross-check oracle only —
+     never a game backend.)
 
 ## Components & players
 

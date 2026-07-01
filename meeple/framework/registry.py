@@ -1,5 +1,5 @@
 """Registry: game id -> `Game` factory. The only place `ai`/`eval`/`web` look
-up a game by name, so they never import `meeple.games` directly (CLAUDE.md G2)."""
+up a game by name, so they never import a specific game's package directly."""
 
 from collections.abc import Callable
 
