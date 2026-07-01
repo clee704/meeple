@@ -96,57 +96,55 @@ flowchart TD
 
 ## State transitions & special mechanics (the core of the game)
 
-You **control** an island once you own a strict majority of its bridge
-lines — strictly more than half, not just half. On a 5-line island that's 3
-bridges (half of 5 is 2.5, so 3 clears it); on a 4-line island it's *also*
-3, not 2 — an even split doesn't count as control for either side.
+**The rules, stated directly:**
 
-Because "strict majority" means more than half of a fixed line count, only
-one player can ever hold it at a time — so every island is either
-controlled by exactly one player, or controlled by nobody. Control never
-transfers directly from one player to the other; `place` and `remove` each
-only push it one way:
+1. You **control** an island whenever you currently own a strict majority of
+   its bridge lines — strictly more than half, not just half. (5-line
+   island: 3 bridges. 4-line island: also 3, not 2 — an even split isn't a
+   majority for either side.) This isn't a flag that gets set once and then
+   sticks; it's just whatever the current bridge count says, checked fresh
+   every time a bridge changes.
+2. The moment a `place` is what pushes your count on an island past strict
+   majority for the first time, you immediately take that island's control
+   token, **and** every bridge your opponent owns touching that one island
+   is removed at once.
 
-- **`place` can only *create* control, and only on an island nobody
-  currently controls.** If your opponent already holds strict majority
-  there, you mathematically cannot out-place them — the remaining free
-  lines can never add up to more than they already have. So the moment a
-  placement gives *you* a new strict majority (only possible on a
-  currently-uncontrolled island), you take that island's control token, and
-  every bridge your opponent owns touching that one island is removed
-  immediately. This is the only situation where a bridge gets removed as a
-  side effect of something else, and it only ever hits the island you just
-  took — never a neighbor, no matter how connected the board is.
-- **`remove` can only *destroy* control, turning a controlled island back
-  into an uncontrolled one.** Whether it's a direct `remove` action, or a
-  bridge stripped as the side effect described below, taking away enough of
-  the controlling player's bridges drops them below strict majority and
-  costs them the token — it never hands control to anyone else in the same
-  step.
+That's the whole rule set for control. Everything below is a consequence of
+those two rules, not an additional one.
 
-That said, removing those bridges can still ripple outward, just not by
-knocking down more bridges. Each bridge you just stripped sat on a line
-leading to some other island too, so the opponent's count there drops by
-one — and if that drops them below strict majority, they lose their token
-on that far island as well. Nothing else happens to it: their remaining
-bridges there are untouched, and no further removal is triggered. Losing
-majority costs the token, and only the token.
+**What follows from that:**
 
-That leaves the far island uncontrolled, not captured — and reclaiming it
-is a separate, later event, open to *either* player. Whoever gets there
-first with a new majority triggers the same "take the token, strip the
-other side's bridges" event on that island. This cuts both ways: dethroning
-your opponent doesn't hand you first claim on what opens up — if they
-rebuild majority there before you do, it's your bridges that get stripped
-next. That symmetric risk, repeated turn after turn over whichever islands
-are currently vulnerable, is what makes board position matter — not a
-single move triggering an instant chain reaction.
-
-One mechanical simplification worth calling out for the engine: since a
-`place` only touches one line, and a line only has two endpoint islands, a
-single action can only ever directly change bridge counts on those two
-islands. There's no board-wide sweep needed after a move — just a check of
-the (at most two) islands whose bridge count just changed.
+- Strict majority needs more than half of a *fixed* line count, so only one
+  player can ever hold it on a given island. Control therefore never
+  transfers directly between players in one step — an island is always
+  controlled by exactly one player, or by nobody.
+- Rule 2 only fires on a *new* majority, and per the point above that's only
+  possible on an island nobody already controls (you can't out-place an
+  opponent who still holds their majority-supporting bridges). So `place`
+  only ever *creates* control — it can't take control away from an existing
+  holder directly.
+- `remove` — a direct action, or the side effect in rule 2 — only ever
+  works the other way: it *destroys* control, by dropping someone's count
+  below majority. It never hands control to anyone else in that same step.
+- Rule 2's bridge removal can still ripple to a second island: each bridge
+  it strips sits on a line with another endpoint elsewhere, so the
+  opponent's count *there* drops by one too. If that drops them below
+  majority, they lose that island's token as well — but nothing more: their
+  other bridges there are untouched, and nothing else gets removed. Losing
+  majority only ever costs the token, never bridges by itself.
+- That leaves the far island uncontrolled, not captured. Reclaiming it is a
+  separate, later action, open to *either* player — whoever gets there
+  first with a new majority triggers rule 2 all over again on *that*
+  island. This cuts both ways: dethroning your opponent doesn't give you
+  first claim on what opens up — if they rebuild majority there first, it's
+  your bridges that get stripped next. That repeatable, symmetric risk over
+  whichever islands are currently vulnerable is what makes board position
+  matter, not a single move triggering an instant chain reaction.
+- Mechanically: `place` and `remove` each touch exactly one line, and a
+  line has exactly two endpoint islands — so a single action can only ever
+  directly change bridge counts on those two islands. No board-wide sweep
+  is needed after a move, just a check of the (at most two) islands whose
+  count just changed.
 
 Bridges and tokens are also a limited, shared supply — 25 bridges and 10
 tokens per player, in total. Running out limits what you can still play.
