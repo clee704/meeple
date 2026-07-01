@@ -29,34 +29,50 @@ part of the game.
 - **12 islands** connected by **27 bridge lines**, traced from the physical
   board:
 
+The board is laid out in 4 rows (this matches the physical board, and is
+why the diagram below is grouped the way it is):
+
+```
+ALOA - BARI - COCO
+DUDA - ELAI - FAAA - GOLA
+HUNA - IFFI - JOJO - KAHU
+LALE
+```
+
 ```mermaid
-graph LR
-    ALOA --- BARI
+graph TB
+    subgraph Row1[ ]
+        direction LR
+        ALOA --- BARI --- COCO
+    end
+    subgraph Row2[ ]
+        direction LR
+        DUDA --- ELAI --- FAAA --- GOLA
+    end
+    subgraph Row3[ ]
+        direction LR
+        HUNA --- IFFI --- JOJO --- KAHU
+    end
+    LALE
+
     ALOA --- DUDA
     ALOA --- HUNA
-    BARI --- COCO
     BARI --- DUDA
     BARI --- ELAI
     BARI --- FAAA
     COCO --- FAAA
     COCO --- GOLA
     COCO --- KAHU
-    DUDA --- ELAI
     DUDA --- HUNA
-    ELAI --- FAAA
     ELAI --- HUNA
     ELAI --- IFFI
     ELAI --- JOJO
-    FAAA --- GOLA
     FAAA --- JOJO
     GOLA --- JOJO
     GOLA --- KAHU
-    HUNA --- IFFI
     HUNA --- LALE
-    IFFI --- JOJO
     IFFI --- KAHU
     IFFI --- LALE
-    JOJO --- KAHU
     KAHU --- LALE
 ```
 
