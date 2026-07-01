@@ -79,14 +79,12 @@ flowchart TD
     C --> D{New strict majority for you<br/>on either endpoint island?}
     D -->|yes| E[Take that island's token +<br/>remove ALL opponent bridges there]
     D -->|no| B
-    E --> F{Did that removal drop the opponent<br/>below majority on the far island<br/>each removed bridge led to?}
+    B -->|remove| H[Remove one opponent bridge]
+    E --> F{Did any opponent bridge just<br/>removed drop them below majority<br/>on its other endpoint island?}
+    H --> F
     F -->|yes| G[Opponent loses that token too —<br/>their other bridges there stay put]
     F -->|no| B
     G --> B
-    B -->|remove| H[Remove one opponent bridge]
-    H --> I{Did the opponent drop below<br/>majority on either endpoint island?}
-    I -->|yes| G
-    I -->|no| B
     B -->|end turn| J{How do you end it?}
     J -->|draw blind| K[Draw from face-down pile — chance]
     J -->|take face-up card| L[Take a specific visible card,<br/>then refill the slot from the pile — chance]
