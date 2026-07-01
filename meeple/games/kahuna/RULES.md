@@ -16,7 +16,7 @@ part of the game.
 
 ## Status
 
-- [ ] **Human verified** — check once you've compared everything below
+- [x] **Human verified** — check once you've compared everything below
   against a real source.
 - **Sources:**
   1. Official manual (Thames & Kosmos) — http://www.thamesandkosmos.com/manuals/full/691806_kahuna_manual.pdf
@@ -309,4 +309,4 @@ in Components & players above.)*
 - [x] No open questions remain unresolved.
 - [x] GameSpec and action encoding are fully specified.
 - [x] A worked example is provided.
-- [ ] Human verified, at the top.
+- [x] Human verified, at the top.
