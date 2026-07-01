@@ -137,24 +137,24 @@ it — CLAUDE.md G8), not a quick patch.
 ## Phases
 
 Each phase's Definition of Done, checklist, and running log of decisions lives
-in its GitHub issue (label `phase`) — linked below once filed. Don't start a
-phase before the previous one's issue is closed. **[platform]** = build once
-& reuse; **[per-game]** = repeat via the onboarding recipe in `CLAUDE.md`.
+in its GitHub issue (label `phase`). Don't start a phase before the previous
+one's issue is closed. **[platform]** = build once & reuse; **[per-game]** =
+repeat via the onboarding recipe in `CLAUDE.md`.
 
 | # | Phase | Tag | Scope | Issue |
 |---|-------|-----|-------|-------|
-| 0 | Setup | platform | venv, `pyproject.toml`, dev tooling (ruff/vulture/deptry/import-linter/pytest), pre-commit + CI | _TBD_ |
-| 1 | Framework seam | platform | `Game`/`State`/`GameSpec`/registry, native Kuhn poker, `OpenSpielAdapter` (oracle), `random_agent` | _TBD_ |
-| 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | _TBD_ |
-| 3 | Terminal UI | shell + per-game renderer | game-agnostic CLI shell + Kahuna ASCII renderer; human-vs-human | _TBD_ |
-| 4 | AI: heuristic + MCTS + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py`, `ai/mcts.py`, `ai/ismcts.py` | _TBD_ |
-| 5 | Eval harness | platform | `eval/tournament.py`, `eval/exploitability.py` validated vs OpenSpiel on Kuhn | _TBD_ |
-| 6 | Tabular CFR | platform | `ai/cfr/tabular.py`, validated on native Kuhn | _TBD_ |
-| 7 | Coach / explain mode | platform | rank legal moves by win-prob, narrate control changes, `--hint` | _TBD_ |
-| 8 | Deep CFR | platform | `ai/cfr/deep_cfr.py`, advantage/strategy nets, external-sampling MCCFR | _TBD_ |
-| 9 | Web backend | platform | FastAPI, queue, store, Turnstile, Cloudflare Tunnel + systemd | _TBD_ |
-| 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes | _TBD_ |
-| 11 | Polish / deploy | platform | checkpoints, difficulty levels, `--watch`, monitoring | _TBD_ |
+| 0 | Setup | platform | venv, `pyproject.toml`, dev tooling (ruff/vulture/deptry/import-linter/pytest), pre-commit + CI | [#1](https://github.com/clee704/meeple/issues/1) (closed) |
+| 1 | Framework seam | platform | `Game`/`State`/`GameSpec`/registry, native Kuhn poker, `OpenSpielAdapter` (oracle), `random_agent` | [#2](https://github.com/clee704/meeple/issues/2) (closed) |
+| 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | [#3](https://github.com/clee704/meeple/issues/3) |
+| 3 | Terminal UI | shell + per-game renderer | game-agnostic CLI shell + Kahuna ASCII renderer; human-vs-human | [#4](https://github.com/clee704/meeple/issues/4) |
+| 4 | AI: heuristic + MCTS + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py`, `ai/mcts.py`, `ai/ismcts.py` | [#5](https://github.com/clee704/meeple/issues/5) |
+| 5 | Eval harness | platform | `eval/tournament.py`, `eval/exploitability.py` validated vs OpenSpiel on Kuhn | [#6](https://github.com/clee704/meeple/issues/6) |
+| 6 | Tabular CFR | platform | `ai/cfr/tabular.py`, validated on native Kuhn | [#7](https://github.com/clee704/meeple/issues/7) |
+| 7 | Coach / explain mode | platform | rank legal moves by win-prob, narrate control changes, `--hint` | [#8](https://github.com/clee704/meeple/issues/8) |
+| 8 | Deep CFR | platform | `ai/cfr/deep_cfr.py`, advantage/strategy nets, external-sampling MCCFR | [#9](https://github.com/clee704/meeple/issues/9) |
+| 9 | Web backend | platform | FastAPI, queue, store, Turnstile, Cloudflare Tunnel + systemd | [#10](https://github.com/clee704/meeple/issues/10) |
+| 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes | [#11](https://github.com/clee704/meeple/issues/11) |
+| 11 | Polish / deploy | platform | checkpoints, difficulty levels, `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
 
 Status right now: **Phase 0 and 1 done** (tooling committed; framework seam,
 native Kuhn, `OpenSpielAdapter`, `random_agent` implemented and tested).
