@@ -1,5 +1,5 @@
-"""Native Kuhn poker engine — exercises the framework seam with zero
-OpenSpiel dependency (PLAN.md Phase 1). Rules: `meeple/games/kuhn/RULES.md`."""
+"""Native Kuhn poker engine — exercises the `Game`/`State` interface with zero
+OpenSpiel dependency. Rules: `meeple/games/kuhn/RULES.md`."""
 
 from itertools import permutations
 

@@ -1,4 +1,4 @@
-"""Global seed control (CLAUDE.md Phase 0 hygiene)."""
+"""Global seed control, so runs are reproducible from a single seed."""
 
 import random
 

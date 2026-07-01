@@ -12,7 +12,8 @@ def _deal(p0_card: int, p1_card: int, history: str = "") -> KuhnState:
 
 def _random_playthrough(state: State, rng: random.Random) -> State:
     """Drives `state` to terminal via uniform-random choices, without pulling
-    in `meeple.ai` — `games/` may only import `framework/` (CLAUDE.md G2)."""
+    in `meeple.ai` — a game's package should depend only on `meeple.framework`,
+    never on the AI layer, and that includes its own tests."""
     while not state.is_terminal():
         if state.current_player() == CHANCE:
             outcomes, probs = zip(*state.chance_outcomes(), strict=True)

@@ -1,6 +1,7 @@
 """GameSpec — the static description the AI layer uses to pick a compatible
-solver (CLAUDE.md's solver-compatibility matrix). Drives behavior; never
-branches on a game's name (CLAUDE.md P5)."""
+solver (e.g. CFR only applies to 2-player zero-sum imperfect-info games).
+Code that consumes a GameSpec should branch on these properties, never on a
+specific game's name."""
 
 from dataclasses import dataclass
 

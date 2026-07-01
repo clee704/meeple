@@ -1,5 +1,6 @@
-"""Exercises random_agent against a minimal inline State — not `games.kuhn`,
-since `meeple.ai` may only import `framework` (CLAUDE.md G2)."""
+"""Exercises random_agent against a minimal inline State rather than
+`games.kuhn` — code under `meeple.ai` should depend only on `meeple.framework`,
+never on a specific game's package, and that includes its own tests."""
 
 import random
 
