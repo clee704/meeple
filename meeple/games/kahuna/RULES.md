@@ -5,7 +5,7 @@
 > written for this game until it's filled in, sourced, and checked off below.
 >
 > Most of the rules below are already verified against the sources cited.
-> **Two open questions remain and block engine coding** — resolve them
+> **One open question remains and blocks engine coding** — resolve it
 > against the physical rulebook before implementing `legal_actions` or
 > scoring.
 
@@ -44,8 +44,8 @@ part of the game.
 ## Turn structure
 
 On your turn you can play any number of island cards (including zero), then
-you must draw exactly one card. Hand limit is 5. `place` and `remove` are
-each one atomic action, even though `remove` costs 2 cards at once:
+you end your turn by drawing or skipping (see below). `place` and `remove`
+are each one atomic action, even though `remove` costs 2 cards at once:
 
 - **`place(bridge_pos)`** — discard 1 card naming an island at either end of
   an empty bridge line, and place your bridge there.
@@ -58,8 +58,19 @@ each one atomic action, even though `remove` costs 2 cards at once:
     islands to remove the specific opponent bridge that directly connects
     those two islands (only legal if that exact bridge line exists and your
     opponent owns it).
-- **`end_turn`** — stop playing cards for this turn; this is what triggers
-  the draw.
+- **Ending your turn** — one of:
+  - **Draw blind** from the face-down pile (a chance event: the pile's
+    order is hidden).
+  - **Take a specific face-up card** (you can see all 3, so this is a
+    deliberate pick, not chance). Immediately refill that now-empty slot by
+    flipping the top card of the face-down pile face up — a chance event,
+    since the pile's order is hidden, but it happens right away, not on a
+    later turn.
+  - **Skip** — end your turn without drawing at all. Only legal if your
+    opponent did **not** also skip on their immediately preceding turn — two
+    skips can't happen back-to-back.
+
+Hand limit is 5.
 
 ```mermaid
 flowchart TD
@@ -76,66 +87,68 @@ flowchart TD
     H --> I{Did the opponent drop below<br/>majority on either endpoint island?}
     I -->|yes| G
     I -->|no| B
-    B -->|end turn| J[Draw one card — a chance event]
-    J --> K([Opponent's turn])
+    B -->|end turn| J{How do you end it?}
+    J -->|draw blind| K[Draw from face-down pile — chance]
+    J -->|take face-up card| L[Take a specific visible card,<br/>then refill the slot from the pile — chance]
+    J -->|skip, if allowed| M[No draw this turn]
+    K --> N([Opponent's turn])
+    L --> N
+    M --> N
 ```
-
-After `end_turn`, the draw is a chance event — one card comes from the
-face-down pile or possibly one of the 3 face-up cards (exactly how that
-works is Open question #3) — and then it's the opponent's turn.
 
 ## State transitions & special mechanics (the core of the game)
 
-This is the part that makes Kahuna interesting, so it's worth walking
-through slowly:
+You **control** an island once you own a strict majority of its bridge
+lines — strictly more than half, not just half. On a 5-line island that's 3
+bridges (half of 5 is 2.5, so 3 clears it); on a 4-line island it's *also*
+3, not 2 — an even split doesn't count as control for either side.
 
-- You **control** an island once you own a strict majority of its bridge
-  lines (more than half — so on a 5-line island, 3 bridges is enough).
-- The moment a `place` gives you a *new* strict majority on an island, two
-  things happen at once: you take that island's control token, **and** every
-  bridge your opponent owns touching that *one* island is immediately
-  removed. This is the only way bridges get removed as a side effect of
-  another action — it only ever hits the island you just took, never a
-  neighbor.
-- Removing those opponent bridges can still affect a neighboring island,
-  because each removed bridge sits on a line that leads somewhere else too:
-  if the opponent's count on that far island drops below strict majority as
-  a result, **they simply lose their token there — nothing more.** Their
-  other bridges on that island are untouched, and nothing gets
-  auto-removed there. Losing majority costs you the token; it never costs
-  you bridges by itself.
-- That's *not* the cascade, even though it looks like the start of one — an
-  island that just lost its token isn't captured by anyone, it's just open.
-  The actual cascade plays out over **later turns**: since that island now
-  has no majority holder, either player can place new bridges on its
-  remaining free lines to claim it.
-- **Dethroning is a risk, not a free gain.** Whoever reclaims that
-  now-open island triggers the "take the token, strip the *other* player's
-  remaining bridges there" event — and that cuts both ways. If you're the
-  one who caused the opponent to lose their token there, you don't have
-  first claim on it; if the opponent gets there first and builds their own
-  new majority, it's now **your** bridges on that island that get stripped,
-  not theirs. Knocking an opponent off an island opens a contested space
-  that either side can end up winning — which is what keeps this a
-  repeatable, turn-by-turn tug-of-war rather than a one-way ratchet in your
-  favor, and why board position (who can reach a vulnerable island first)
-  matters as much as the initial move that opened it up.
-- Because one `place` only touches one line, and a line only has 2 endpoint
-  islands, a single action can only ever directly change bridge counts on
-  those 2 islands — so there's no wider board-wide sweep needed after a
-  move, just a check of the (at most 2) islands whose bridge count just
-  changed.
-- Bridges and tokens are limited — 25 bridges and 10 tokens per player, total.
-  Running out limits what you can still play.
+Control only changes hands through a `place`: the moment a placement gives
+you a *new* strict majority on an island, you take that island's control
+token, and every bridge your opponent owns touching that one island is
+removed immediately. This is the only situation where a bridge gets removed
+as a side effect of something else, and it only ever hits the island you
+just took — never a neighbor, no matter how connected the board is.
+
+That said, removing those bridges can still ripple outward, just not by
+knocking down more bridges. Each bridge you just stripped sat on a line
+leading to some other island too, so the opponent's count there drops by
+one — and if that drops them below strict majority, they lose their token
+on that far island as well. Nothing else happens to it: their remaining
+bridges there are untouched, and no further removal is triggered. Losing
+majority costs the token, and only the token.
+
+That leaves the far island uncontrolled, not captured — and reclaiming it
+is a separate, later event, open to *either* player. Whoever gets there
+first with a new majority triggers the same "take the token, strip the
+other side's bridges" event on that island. This cuts both ways: dethroning
+your opponent doesn't hand you first claim on what opens up — if they
+rebuild majority there before you do, it's your bridges that get stripped
+next. That symmetric risk, repeated turn after turn over whichever islands
+are currently vulnerable, is what makes board position matter — not a
+single move triggering an instant chain reaction.
+
+One mechanical simplification worth calling out for the engine: since a
+`place` only touches one line, and a line only has two endpoint islands, a
+single action can only ever directly change bridge counts on those two
+islands. There's no board-wide sweep needed after a move — just a check of
+the (at most two) islands whose bridge count just changed.
+
+Bridges and tokens are also a limited, shared supply — 25 bridges and 10
+tokens per player, in total. Running out limits what you can still play.
 
 ## Chance & hidden information
 
 - **Public**: the whole board (every bridge and who owns it), both players'
   placed tokens, the scores, which round it is, remaining bridge/token
-  supplies, and the 3 face-up cards.
+  supplies, the 3 face-up cards, and whether the previous turn ended in a
+  skip (needed to know if skipping is currently legal).
 - **Hidden**: what's in each player's hand, and the order of the face-down
   pile.
-- **Random events**: the end-of-turn draw.
+- **Random events**: drawing blind from the face-down pile — whether as
+  your own draw, or as the automatic refill after someone takes a face-up
+  card. Taking a specific face-up card is a visible, deliberate choice, not
+  a random event.
 
 ## Terminal conditions & scoring
 
@@ -162,30 +175,39 @@ num_players           = 2
 perfect_information   = False
 has_chance            = True
 zero_sum              = True
-num_distinct_actions  = 2 * <#bridge_pos> + 1     # place + remove per line, + end_turn  (≈ 49)
+num_distinct_actions  = 2 * <#bridge_pos> + 5   # place + remove per line,
+                                                 # + draw-blind + 3 face-up picks + skip  (≈ 53)
 ```
 
 ## Action encoding
 
-Once the board graph is pinned down (Open question #1), the plan is a stable
-integer scheme:
+Once the board graph is pinned down (Open question #1), the plan is a
+stable integer scheme:
 - `0 .. P-1` → `place(bridge_pos = i)`
 - `P .. 2P-1` → `remove(bridge_pos = i - P)`
-- `2P` → `end_turn`
+- `2P` → end turn, draw blind from the face-down pile
+- `2P+1 .. 2P+3` → end turn, take face-up slot `j` (`j` in 0..2)
+- `2P+4` → end turn, skip the draw
 
-where `P` is the number of bridge positions. `legal_actions()` filters these
-down by: the line is free and you hold a card naming one of its endpoint
-islands (`place`); your opponent owns that bridge and you hold either 2 cards
-naming one of its endpoint islands, or 1 card naming each endpoint island
-(`remove`); `end_turn` is always legal.
+where `P` is the number of bridge positions. (Exactly how face-up slots are
+indexed as they get refilled is an implementation detail to pin down when
+the engine is built, not a rules question.)
+
+`legal_actions()` filters these down by: the line is free and you hold a
+card naming one of its endpoint islands (`place`); your opponent owns that
+bridge and you hold either 2 cards naming one of its endpoint islands, or 1
+card naming each endpoint island (`remove`); draw-blind and each currently-
+filled face-up slot are always legal; skip is legal only if the opponent's
+immediately preceding turn wasn't itself a skip.
 
 ## Information-state tensor (for Deep CFR)
 
-Per-bridge owner (3 possibilities × P positions) · per-island control, degree,
-and each player's bridge count there · your hand, counted per island (12
-numbers) · the 3 public face-up cards · cards seen/discarded so far this
-round · bridges/tokens remaining · which round it is · scores · whether
-you've already played a card this turn.
+Per-bridge owner (3 possibilities × P positions) · per-island control,
+degree, and each player's bridge count there · your hand, counted per
+island (12 numbers) · the 3 public face-up cards · cards seen/discarded so
+far this round · bridges/tokens remaining · which round it is · scores ·
+whether you've already played a card this turn · whether the opponent
+skipped their last turn (so you know if skipping is legal for you).
 
 ## Worked example
 
@@ -203,14 +225,11 @@ newly-uncontrolled neighbor.
 - [ ] **MUST-VERIFY #1 — Exact board graph.** The full island adjacency and
   the exact count of bridge lines (`P`). This defines the whole action space
   — needs tracing directly from the physical board.
-- [ ] **MUST-VERIFY #3 — Draw mechanics.** Can you draw from the 3 face-up
-  cards as well as the face-down pile, and if a face-up slot is taken, how
-  does it get refilled?
 
 ## Checklist
 
 - [x] Every rule cites a source.
-- [ ] No open questions remain unresolved. **(2 open — blocking)**
+- [ ] No open questions remain unresolved. **(1 open — blocking)**
 - [ ] GameSpec and action encoding are fully specified. *(waiting on #1)*
 - [ ] A worked example is provided. *(waiting on #1)*
 - [ ] Human verified, at the top.
