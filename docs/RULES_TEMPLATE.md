@@ -1,85 +1,114 @@
-# <GAME NAME> — Rules contract
+# <GAME NAME> — Rules
 
-> **This document is a hard gate.** No engine code may be written
-> for this game until this file is complete, every rule is cited, all
-> `MUST-VERIFY` items are resolved, and the human sign-off below is checked.
-> Do **not** fill this in from memory — cite a real source for every rule.
+> This file has two jobs: it's the actual rulebook — something a person can
+> read to learn how the game works — *and* it's a gate: no engine code gets
+> written for this game until it's filled in, sourced, and checked off below.
+> Write for both audiences. Plain language and an example beat precise jargon;
+> a diagram beats a paragraph, if one would help.
+>
+> Don't fill this in from memory — cite where each rule actually came from.
 
 ## Status
 
-- **State:** DRAFT  *(change to VERIFIED only when complete)*
-- **Human verified:** [ ]  — name / date: ____________________
-- **Sources** (≥2 authoritative; the official rulebook is mandatory):
+- [ ] **Human verified** — check once you've compared everything below
+  against a real source.
+- **Sources** — at least one authoritative source (the official rulebook, if
+  the game has one). A second independent source is great for catching
+  transcription mistakes, especially on niche/unofficial or word-of-mouth
+  games — but don't manufacture one that doesn't add anything.
   1. <title> — <url>
-  2. <title> — <url>
 
 ## Components & players
 
-- Players: <n> (or range)
+- Players: <n> (or a range, e.g. 2–4)
 - Pieces/cards/tokens: <list with exact counts>
 
 ## Setup
 
-<exact starting state: hands, board, decks, face-up cards, who goes first>
+<the exact starting position: hands, board, decks, face-up cards, who goes
+first. Write it the way you'd explain it to someone about to play for the
+first time.>
 
 ## Turn structure
 
-<precise sequence of a turn. Define it in terms of ATOMIC sub-actions so the
-game tree is clean — e.g. "place one X", "end turn", "draw" — not "do several
-things at once". Note any hand limits / forced draws.>
+<the sequence of a turn, broken into the smallest individual steps — e.g.
+"play one card," "draw," "pass" — rather than "do several things at once."
+Note any hand limits or forced draws. A flowchart or state diagram (see
+Diagrams below) is often clearer here than prose.>
 
-## Legal actions (enumeration)
+## Legal actions
 
-<exactly which actions are legal at a decision node, and their preconditions.
-This defines `legal_actions()`.>
+<what moves are available on a normal turn, and any preconditions on them.
+"Normal turn" = it's a player's turn to decide something — not a random event
+(like a dice roll or card draw) and not after the game has already ended.>
 
 ## State transitions & special mechanics
 
-<how each action changes state; cascades; control/ownership rules; anything that
-must be recomputed to a fixpoint after a change.>
+<how each action changes the game state — chain reactions, ownership/control
+changes, anything that needs to be re-checked after a change ripples through.
+Walk through a concrete example rather than describing it abstractly, if the
+mechanic is at all fiddly.>
 
 ## Chance & hidden information
 
-- **Public** (both/all players see): <...>
-- **Hidden** (per-player): <...>
-- **Chance events** (and their distributions): <...>
-
-*(This section drives the information-state tensor and the solver choice.)*
+- **Public** (everyone sees): <...>
+- **Hidden** (each player only sees their own): <...>
+- **Random events** (dice, draws, shuffles — and their odds): <...>
 
 ## Terminal conditions & scoring
 
-<exact end trigger(s) and the exact scoring/win formula. Include tiebreakers.
-Be numeric — "+1 / +2 / difference", not "some points".>
+<exactly how and when the game ends, and the exact scoring/win formula,
+including tiebreakers. Use real numbers — "+1 / +2 / difference," not "some
+points.">
+
+## Diagrams (optional, but use them if they'd help)
+
+<a board layout, a turn-flow state diagram, a small game tree — whatever
+would help a reader picture the game faster than prose can. GitHub renders
+Mermaid diagrams inline, e.g.:>
+
+```mermaid
+flowchart LR
+    A[Start of turn] --> B[Take an action]
+    B --> C{Game over?}
+    C -- no --> A
+    C -- yes --> D[Score]
+```
 
 ## GameSpec
 
 ```
 name                  = "<game>"
 num_players           = <n>
-perfect_information    = <bool>
+perfect_information   = <bool>
 has_chance            = <bool>
 zero_sum              = <bool>
-num_distinct_actions  = <int>          # action-space upper bound (network output dim)
+num_distinct_actions  = <int>          # size of the whole action space
 ```
 
 ## Action encoding
 
-<the fixed integer index scheme for actions, and how it sums to
-num_distinct_actions. This must be stable — tests and nets depend on it.>
+<the fixed integer scheme mapping each action to a number, and how it adds up
+to num_distinct_actions above. This needs to stay stable — tests and any
+neural nets depend on it.>
 
-## Worked example / known position (for tests)
+## Worked example
 
-<at least one concrete position with the expected legal actions and, if
-terminal, the expected returns. This becomes a regression test.>
+<walk through one concrete position in plain language: what's the situation,
+what moves are available, what happens if a specific move is played. This
+doubles as a regression test once the engine exists.>
 
-## OPEN / MUST-VERIFY (BLOCKING)
+## Open questions
 
-- [ ] <each uncertain rule — must be resolved & checked off before coding>
+<anything you're not sure about yet — tag it `MUST-VERIFY` and don't write
+engine code that depends on it until it's resolved against a real source.>
 
-## Rules-first checklist
+- [ ] **MUST-VERIFY —** <question>
+
+## Checklist
 
 - [ ] Every rule above cites a source.
-- [ ] No `MUST-VERIFY` items remain open.
+- [ ] No open questions remain unresolved.
 - [ ] GameSpec and action encoding are fully specified.
-- [ ] At least one worked example is provided.
-- [ ] Human sign-off checked at the top.
+- [ ] A worked example is provided.
+- [ ] Human verified, at the top.
