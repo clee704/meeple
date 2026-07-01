@@ -10,8 +10,11 @@
 > scoring.
 
 Kahuna is a 2-player board game about building bridges between islands to
-take control of them — and sometimes triggering a chain reaction that flips
-several islands from your opponent's control to yours in one move.
+take control of them. Taking one island can knock your opponent out of
+control of a *neighboring* island too — not by flipping it to you outright,
+but by leaving it uncontrolled and open for whoever moves in next. That
+slow, multi-turn tug-of-war over newly-vulnerable islands is the interesting
+part of the game.
 
 ## Status
 
@@ -61,15 +64,20 @@ each one atomic action, even though `remove` costs 2 cards at once:
 ```mermaid
 flowchart TD
     A([Your turn starts]) --> B{Play a card?}
-    B -->|place| C[place bridge, check for new control]
-    B -->|remove| D[remove opponent bridge, check for lost control]
-    C --> E{Control changed?}
-    D --> E
-    E -->|yes| F[cascade: recompute control<br/>on every island until stable]
-    E -->|no| B
-    F --> B
-    B -->|end turn| G[draw one card — a chance event]
-    G --> H([Opponent's turn])
+    B -->|place| C[Place a bridge on a line]
+    C --> D{New strict majority for you<br/>on either endpoint island?}
+    D -->|yes| E[Take that island's token +<br/>remove ALL opponent bridges there]
+    D -->|no| B
+    E --> F{Did that removal drop the opponent<br/>below majority on the far island<br/>each removed bridge led to?}
+    F -->|yes| G[Opponent loses that token too —<br/>their other bridges there stay put]
+    F -->|no| B
+    G --> B
+    B -->|remove| H[Remove one opponent bridge]
+    H --> I{Did the opponent drop below<br/>majority on either endpoint island?}
+    I -->|yes| G
+    I -->|no| B
+    B -->|end turn| J[Draw one card — a chance event]
+    J --> K([Opponent's turn])
 ```
 
 After `end_turn`, the draw is a chance event — one card comes from the
@@ -83,16 +91,34 @@ through slowly:
 
 - You **control** an island once you own a strict majority of its bridge
   lines (more than half — so on a 5-line island, 3 bridges is enough).
-- The moment a placement gives you a *new* strict majority on an island, two
-  things happen at once: you place your control token there, **and** every
-  bridge your opponent owns touching that island is immediately removed.
-- Removing those opponent bridges can, in turn, drop your opponent below
-  majority on a *neighboring* island — so they lose control (and their
-  token) there too. That can ripple further outward. This is the
-  **cascade**.
-- The rule of thumb: after *any* bridge is placed or removed, anywhere,
-  recheck every island's control and keep resolving fallout until nothing
-  changes anymore (a fixpoint), not just the one island you touched.
+- The moment a `place` gives you a *new* strict majority on an island, two
+  things happen at once: you take that island's control token, **and** every
+  bridge your opponent owns touching that *one* island is immediately
+  removed. This is the only way bridges get removed as a side effect of
+  another action — it only ever hits the island you just took, never a
+  neighbor.
+- Removing those opponent bridges can still affect a neighboring island,
+  because each removed bridge sits on a line that leads somewhere else too:
+  if the opponent's count on that far island drops below strict majority as
+  a result, **they simply lose their token there — nothing more.** Their
+  other bridges on that island are untouched, and nothing gets
+  auto-removed there. Losing majority costs you the token; it never costs
+  you bridges by itself.
+- That's *not* the cascade, even though it looks like the start of one — an
+  island that just lost its token isn't captured by anyone, it's just open.
+  The actual cascade plays out over **later turns**: since that island now
+  has no majority holder, either player can place new bridges on its
+  remaining free lines to claim it. If you're the one who claims it, that
+  triggers the exact same "take the token, strip the opponent's remaining
+  bridges there" event on *that* island — which can, in turn, cost the
+  opponent their token on yet another neighbor. It's this repeatable,
+  turn-by-turn tug-of-war over newly-vulnerable islands that makes board
+  position matter, not an instant chain reaction within one move.
+- Because one `place` only touches one line, and a line only has 2 endpoint
+  islands, a single action can only ever directly change bridge counts on
+  those 2 islands — so there's no wider board-wide sweep needed after a
+  move, just a check of the (at most 2) islands whose bridge count just
+  changed.
 - Bridges and tokens are limited — 25 bridges and 10 tokens per player, total.
   Running out limits what you can still play.
 
@@ -159,9 +185,12 @@ you've already played a card this turn.
 
 *(To fill in once the board graph exists — Open question #1.)* Should walk
 through a small mid-game position: the board so far, the exact legal moves
-available, and one placement that triggers a cascade (you gain control of an
-island → strip at least one opponent bridge → your opponent loses a
-neighboring island too), so the cascade logic has a concrete regression test.
+available, and one placement that (a) gives you a new majority on an island,
+(b) strips the opponent's bridges there, and (c) costs the opponent their
+token on a neighboring island too (without touching their other bridges
+there) — so this single-action side effect has a concrete regression test,
+distinct from the later, separate turn where someone actually reclaims that
+newly-uncontrolled neighbor.
 
 ## Open questions
 
