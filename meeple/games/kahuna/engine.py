@@ -98,6 +98,7 @@ class KahunaState(State):
         previous_turn_was_skip: bool,
         final_turns_remaining: int | None,
         premature_winner: int | None,
+        final_round_winner: int | None = None,
     ):
         self._bridges = bridges
         self._hands = hands
@@ -112,6 +113,7 @@ class KahunaState(State):
         self._previous_turn_was_skip = previous_turn_was_skip
         self._final_turns_remaining = final_turns_remaining
         self._premature_winner = premature_winner
+        self._final_round_winner = final_round_winner
 
     # --- derived board queries -------------------------------------------------
 
@@ -218,6 +220,25 @@ class KahunaState(State):
             return [1.0, -1.0] if self._premature_winner == 0 else [-1.0, 1.0]
         return [self._scores[0] - self._scores[1], self._scores[1] - self._scores[0]]
 
+    def winner(self) -> int | None:
+        """RULES.md's Winner tiebreak: total score, then who won the final
+        scoring round specifically, then bridge count on the board, else no
+        winner. Distinct from `returns()`, which is just the net score
+        difference (the zero-sum reward signal) and can be 0 even when this
+        resolves a winner via the tiebreak."""
+        if not self.is_terminal():
+            raise RuntimeError("winner() called on a non-terminal state")
+        if self._premature_winner is not None:
+            return self._premature_winner
+        if self._scores[0] != self._scores[1]:
+            return 0 if self._scores[0] > self._scores[1] else 1
+        if self._final_round_winner is not None:
+            return self._final_round_winner
+        b0, b1 = self._total_bridges(0), self._total_bridges(1)
+        if b0 != b1:
+            return 0 if b0 > b1 else 1
+        return None
+
     def current_player(self) -> int:
         if self._pending:
             return CHANCE
@@ -294,6 +315,7 @@ class KahunaState(State):
             previous_turn_was_skip=self._previous_turn_was_skip,
             final_turns_remaining=self._final_turns_remaining,
             premature_winner=self._premature_winner,
+            final_round_winner=self._final_round_winner,
         )
         fields.update(overrides)
         return KahunaState(**fields)
@@ -364,17 +386,21 @@ class KahunaState(State):
         state = self._replace(hands=tuple(hands), face_up=tuple(face_up))
         if state._pile:
             return state._replace(pending=(f"faceup{slot}",), pending_reason="turn")
-        return state._finish_turn()
+        return state._finish_turn(just_drew=True)
 
     def _apply_skip(self) -> "KahunaState":
         return self._finish_turn(was_skip=True)
 
-    def _finish_turn(self, was_skip: bool = False) -> "KahunaState":
+    def _finish_turn(self, was_skip: bool = False, just_drew: bool = False) -> "KahunaState":
         state = self._replace(previous_turn_was_skip=was_skip)
         just_entered_final_phase = False
-        # Once the final-turns countdown has started, pile+face-up stay empty
-        # for its whole duration — don't re-trigger scoring on every turn.
-        if state._final_turns_remaining is None and state._pile_and_faceup_empty():
+        # Only check for a *new* depletion right after an action that itself
+        # drew the last card (a resolved blind draw, or a face-up pick with
+        # no pile left to refill from) — never on a skip, which touches
+        # neither pile nor face-up. Without this, an already-empty pile
+        # would re-trigger scoring on every subsequent turn-ending action,
+        # even ones (like skip) that changed nothing.
+        if just_drew and state._final_turns_remaining is None and state._pile_and_faceup_empty():
             state = state._trigger_scoring()
             just_entered_final_phase = state._final_turns_remaining is not None
         # The turn that triggers the final phase doesn't itself count as one
@@ -401,7 +427,7 @@ class KahunaState(State):
 
         new_pile = tuple(sorted(self._discard))
         num_to_deal = min(NUM_FACEUP_SLOTS, len(new_pile))
-        return self._replace(
+        state = self._replace(
             scores=tuple(scores),
             scoring_count=scoring_count,
             pile=new_pile,
@@ -410,15 +436,26 @@ class KahunaState(State):
             pending=tuple(f"faceup{j}" for j in range(num_to_deal)),
             pending_reason="reshuffle",
         )
+        if num_to_deal == 0:
+            # Degenerate: nothing was discarded since the last scoring, so
+            # the freshly-reshuffled pile is already empty too. There's no
+            # future draw event left to detect this round's depletion, so
+            # advance straight to the next scoring rather than stalling
+            # forever with nothing left to draw.
+            return state._trigger_scoring()
+        return state
 
     def _final_scoring(self) -> "KahunaState":
         p0, p1 = self._controlled_islands(0), self._controlled_islands(1)
         scores = list(self._scores)
+        final_round_winner = None
         if p0 > p1:
             scores[0] += p0 - p1
+            final_round_winner = 0
         elif p1 > p0:
             scores[1] += p1 - p0
-        return self._replace(scores=tuple(scores))
+            final_round_winner = 1
+        return self._replace(scores=tuple(scores), final_round_winner=final_round_winner)
 
     def _apply_chance(self, action: Action) -> "KahunaState":
         island = ISLANDS[action]
@@ -442,7 +479,7 @@ class KahunaState(State):
             return state
 
         if state._pending_reason == "turn":
-            return state._finish_turn()
+            return state._finish_turn(just_drew=True)
         return state
 
 

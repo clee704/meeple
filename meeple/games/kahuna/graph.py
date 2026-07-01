@@ -43,9 +43,3 @@ DEGREE: dict[str, int] = {island: len(positions) for island, positions in ISLAND
 
 # Strict majority: more than half of an island's lines (ties don't count).
 MAJORITY: dict[str, int] = {island: degree // 2 + 1 for island, degree in DEGREE.items()}
-
-
-def other_endpoint(bridge_pos: int, island: str) -> str:
-    """The island at the far end of `bridge_pos` from `island`."""
-    a, b = BRIDGES[bridge_pos]
-    return b if island == a else a

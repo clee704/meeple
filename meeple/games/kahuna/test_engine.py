@@ -224,8 +224,10 @@ def test_take_faceup_is_a_deliberate_pick_not_chance():
 
 def _deplete_pile_and_faceup(state: KahunaState) -> KahunaState:
     state = state.apply_action(DRAW_BLIND)
-    (action, _prob) = state.chance_outcomes()[0]
-    return state.apply_action(action)
+    while state.current_player() == CHANCE:
+        (action, _prob) = state.chance_outcomes()[0]
+        state = state.apply_action(action)
+    return state
 
 
 def test_interim_scoring_1_awards_one_point_to_the_leader():
@@ -233,7 +235,7 @@ def test_interim_scoring_1_awards_one_point_to_the_leader():
     bridges = _bridges_with(
         ("ALOA", "BARI", 0), ("ALOA", "DUDA", 0), ("HUNA", "LALE", 0), ("IFFI", "LALE", 0)
     )
-    state = _state(bridges=bridges, pile=("ALOA",))
+    state = _state(bridges=bridges, pile=("ALOA",), discard=("BARI",))
     after = _deplete_pile_and_faceup(state)
     assert after._scores == (1.0, 0.0)
     assert after._scoring_count == 1
@@ -255,6 +257,31 @@ def test_third_depletion_starts_final_turns_instead_of_scoring_immediately():
     assert after._final_turns_remaining == 2
     assert after._scores == (0.0, 0.0)  # not scored yet -- one more turn each first
     assert not after.is_terminal()
+
+
+def test_skip_does_not_retrigger_scoring_without_a_new_draw():
+    # Regression: SKIP touches neither pile nor face-up, so it must never
+    # re-fire scoring just because the depleted condition still holds.
+    state = _state(pile=("ALOA",), discard=("BARI",))
+    after = _deplete_pile_and_faceup(state)
+    assert after._scoring_count == 1
+    after_skip = after.apply_action(SKIP)
+    assert after_skip._scoring_count == 1
+
+
+def test_reshuffle_with_empty_discard_cascades_through_remaining_scorings():
+    # Regression: if the discard pile is empty at reshuffle time, the new
+    # pile is empty too, so there's no future draw event that could ever
+    # detect "depleted again" -- the engine must advance scoring itself
+    # instead of getting permanently stuck with nothing left to draw.
+    bridges = _bridges_with(("ALOA", "BARI", 0), ("ALOA", "DUDA", 0))
+    state = _state(bridges=bridges, pile=("ALOA",), discard=())
+    after = _deplete_pile_and_faceup(state)
+    assert after._scoring_count == 3
+    assert after._final_turns_remaining == 2
+    assert after._scores == (3.0, 0.0)  # +1 (round 1) and +2 (round 2), both to player 0
+    assert after._pile == ()
+    assert after._face_up == (None, None, None)
 
 
 def test_final_scoring_awards_exact_island_difference():
@@ -280,7 +307,12 @@ def test_final_scoring_awards_exact_island_difference():
     assert after.returns() == [3.0, -3.0]
 
 
-def test_tiebreak_falls_back_to_final_round_winner_then_bridges():
+def test_winner_is_the_higher_total_score():
+    state = _state(scores=(3.0, 1.0), scoring_count=3, final_turns_remaining=0)
+    assert state.winner() == 0
+
+
+def test_tiebreak_falls_back_to_final_round_winner():
     # Equal totals overall; player 1 wins the final round specifically
     # (majority on ALOA: 2 of its 3 lines).
     state = _state(
@@ -293,8 +325,37 @@ def test_tiebreak_falls_back_to_final_round_winner_then_bridges():
     after = state.apply_action(SKIP)
     assert after.is_terminal()
     assert after._scores == (2.0, 2.0)  # tied overall
-    # Not directly encoded as a single "winner" field, but the final-round
-    # margin is visible for a tiebreak: player 1 gained the final point.
+    assert after.returns() == [0.0, 0.0]  # zero-sum payoff is genuinely tied
+    assert after.winner() == 1  # but player 1 won the final round
+
+
+def test_tiebreak_falls_back_to_bridge_count_when_final_round_is_also_tied():
+    # Equal totals overall, and final round is also a tie (no islands
+    # change hands) -- fall back to whoever has more bridges on the board.
+    state = _state(
+        scores=(1.0, 1.0),
+        scoring_count=3,
+        final_turns_remaining=1,
+        current_player=0,
+        bridges=_bridges_with(("ALOA", "BARI", 0)),
+    )
+    after = state.apply_action(SKIP)
+    assert after.is_terminal()
+    assert after._scores == (1.0, 1.0)
+    assert after.winner() == 0  # only player 0 has a bridge on the board
+
+
+def test_no_winner_when_everything_is_tied():
+    state = _state(scores=(1.0, 1.0), scoring_count=3, final_turns_remaining=1, current_player=0)
+    after = state.apply_action(SKIP)
+    assert after.is_terminal()
+    assert after.winner() is None
+
+
+def test_winner_raises_before_terminal():
+    state = KahunaGame().new_initial_state()
+    with pytest.raises(RuntimeError):
+        state.winner()
 
 
 def test_premature_end_when_a_player_has_zero_bridges_in_round_2_or_later():
@@ -309,6 +370,7 @@ def test_premature_end_when_a_player_has_zero_bridges_in_round_2_or_later():
     after = state.apply_action(REMOVE_AB_BASE + pos)
     assert after.is_terminal()
     assert after.returns() == [1.0, -1.0]
+    assert after.winner() == 0
 
 
 def test_final_scoring_tie_awards_no_points():
