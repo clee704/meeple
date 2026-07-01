@@ -4,10 +4,8 @@
 > read to learn how the game works — *and* it's a gate: no engine code gets
 > written for this game until it's filled in, sourced, and checked off below.
 >
-> Most of the rules below are already verified against the sources cited.
-> **One open question remains and blocks engine coding** — resolve it
-> against the physical rulebook before implementing `legal_actions` or
-> scoring.
+> All rules below are verified against the sources cited, including the
+> exact board graph — human sign-off is the last step before engine coding.
 
 Kahuna is a 2-player board game about building bridges between islands to
 take control of them. Taking one island can knock your opponent out of
@@ -19,7 +17,7 @@ part of the game.
 ## Status
 
 - [ ] **Human verified** — check once you've compared everything below
-  against a real source. *(Blocked right now — see Open questions.)*
+  against a real source.
 - **Sources:**
   1. Official manual (Thames & Kosmos) — http://www.thamesandkosmos.com/manuals/full/691806_kahuna_manual.pdf
   2. UltraBoardGames rules — https://ultraboardgames.com/kahuna/game-rules.php
@@ -28,10 +26,58 @@ part of the game.
 ## Components & players
 
 - **2 players.**
-- **12 islands** connected by a fixed layout of bridge lines; each island has
-  3–6 lines coming off it (the number is printed under the island's name on
-  its card). Total bridge lines is about 24, but the exact count and layout
-  still need tracing from the physical board — see Open question #1.
+- **12 islands** connected by **27 bridge lines**, traced from the physical
+  board:
+
+```mermaid
+graph LR
+    ALOA --- BARI
+    ALOA --- DUDA
+    ALOA --- HUNA
+    BARI --- COCO
+    BARI --- DUDA
+    BARI --- ELAI
+    BARI --- FAAA
+    COCO --- FAAA
+    COCO --- GOLA
+    COCO --- KAHU
+    DUDA --- ELAI
+    DUDA --- HUNA
+    ELAI --- FAAA
+    ELAI --- HUNA
+    ELAI --- IFFI
+    ELAI --- JOJO
+    FAAA --- GOLA
+    FAAA --- JOJO
+    GOLA --- JOJO
+    GOLA --- KAHU
+    HUNA --- IFFI
+    HUNA --- LALE
+    IFFI --- JOJO
+    IFFI --- KAHU
+    IFFI --- LALE
+    JOJO --- KAHU
+    KAHU --- LALE
+```
+
+  Each island's degree (lines touching it, and its majority threshold — the
+  number of bridges needed for strict majority):
+
+  | Island | Degree | Majority |
+  |---|---|---|
+  | ALOA | 3 | 2 |
+  | BARI | 5 | 3 |
+  | COCO | 4 | 3 |
+  | DUDA | 4 | 3 |
+  | ELAI | 6 | 4 |
+  | FAAA | 5 | 3 |
+  | GOLA | 4 | 3 |
+  | HUNA | 5 | 3 |
+  | IFFI | 5 | 3 |
+  | JOJO | 5 | 3 |
+  | KAHU | 5 | 3 |
+  | LALE | 3 | 2 |
+
 - **25 bridges + 10 control tokens per player.**
 - **24 island cards** — 2 per island.
 
@@ -187,23 +233,37 @@ num_players           = 2
 perfect_information   = False
 has_chance            = True
 zero_sum              = True
-num_distinct_actions  = 2 * <#bridge_pos> + 5   # place + remove per line,
-                                                 # + draw-blind + 3 face-up picks + skip  (≈ 53)
+num_distinct_actions  = 2 * 27 + 5 = 59   # place + remove per line (P=27),
+                                          # + draw-blind + 3 face-up picks + skip
 ```
 
 ## Action encoding
 
-Once the board graph is pinned down (Open question #1), the plan is a
-stable integer scheme:
-- `0 .. P-1` → `place(bridge_pos = i)`
-- `P .. 2P-1` → `remove(bridge_pos = i - P)`
-- `2P` → end turn, draw blind from the face-down pile
-- `2P+1 .. 2P+3` → end turn, take face-up slot `j` (`j` in 0..2)
-- `2P+4` → end turn, skip the draw
+`P = 27`. Stable integer scheme:
+- `0 .. 26` → `place(bridge_pos = i)`
+- `27 .. 53` → `remove(bridge_pos = i - 27)`
+- `54` → end turn, draw blind from the face-down pile
+- `55 .. 57` → end turn, take face-up slot `j` (`j` in 0..2)
+- `58` → end turn, skip the draw
 
-where `P` is the number of bridge positions. (Exactly how face-up slots are
-indexed as they get refilled is an implementation detail to pin down when
-the engine is built, not a rules question.)
+(Exactly how face-up slots are indexed as they get refilled is an
+implementation detail to pin down when the engine is built, not a rules
+question.)
+
+`bridge_pos` is assigned by sorting all 27 lines alphabetically by their two
+island names:
+
+| pos | line | pos | line | pos | line |
+|---|---|---|---|---|---|
+| 0 | ALOA-BARI | 9 | COCO-KAHU | 18 | GOLA-JOJO |
+| 1 | ALOA-DUDA | 10 | DUDA-ELAI | 19 | GOLA-KAHU |
+| 2 | ALOA-HUNA | 11 | DUDA-HUNA | 20 | HUNA-IFFI |
+| 3 | BARI-COCO | 12 | ELAI-FAAA | 21 | HUNA-LALE |
+| 4 | BARI-DUDA | 13 | ELAI-HUNA | 22 | IFFI-JOJO |
+| 5 | BARI-ELAI | 14 | ELAI-IFFI | 23 | IFFI-KAHU |
+| 6 | BARI-FAAA | 15 | ELAI-JOJO | 24 | IFFI-LALE |
+| 7 | COCO-FAAA | 16 | FAAA-GOLA | 25 | JOJO-KAHU |
+| 8 | COCO-GOLA | 17 | FAAA-JOJO | 26 | KAHU-LALE |
 
 `legal_actions()` filters these down by: the line is free and you hold a
 card naming one of its endpoint islands (`place`); your opponent owns that
@@ -223,25 +283,49 @@ skipped their last turn (so you know if skipping is legal for you).
 
 ## Worked example
 
-*(To fill in once the board graph exists — Open question #1.)* Should walk
-through a small mid-game position: the board so far, the exact legal moves
-available, and one placement that (a) gives you a new majority on an island,
-(b) strips the opponent's bridges there, and (c) costs the opponent their
-token on a neighboring island too (without touching their other bridges
-there) — so this single-action side effect has a concrete regression test,
-distinct from the later, separate turn where someone actually reclaims that
-newly-uncontrolled neighbor.
+Focus on two neighboring islands that share a bridge line: **ELAI** (degree
+6, majority 4) and **HUNA** (degree 5, majority 3), connected by
+`ELAI-HUNA` (`bridge_pos = 13`).
+
+Board state before the move:
+- **ELAI**'s 6 lines: `BARI-ELAI`(5) and `DUDA-ELAI`(10) and `ELAI-FAAA`(12)
+  are player 0's; `ELAI-HUNA`(13) is player 1's; `ELAI-IFFI`(14) and
+  `ELAI-JOJO`(15) are free. Nobody controls ELAI yet — player 0 has 3 of 6,
+  one short of majority.
+- **HUNA**'s 5 lines: `ALOA-HUNA`(2) and `ELAI-HUNA`(13) and `HUNA-IFFI`(20)
+  are player 1's; `DUDA-HUNA`(11) and `HUNA-LALE`(21) are free. Player 1
+  controls HUNA with exactly 3 of 5 (majority).
+- Player 0 holds a card naming ELAI (or IFFI) in hand.
+
+At this position, `place(bridge_pos=14)` (`ELAI-IFFI`) is legal for player 0
+— the line is free and they hold a card naming one of its endpoints.
+
+Playing it:
+1. Player 0's count on ELAI goes from 3 to 4 — a new strict majority. Player
+   0 takes ELAI's token.
+2. Every player-1 bridge touching ELAI is removed at once — just
+   `ELAI-HUNA`(13), player 1's only bridge there. It returns to the supply
+   and the line is free again.
+3. That removal drops player 1's count on HUNA from 3 to 2 — below HUNA's
+   majority of 3. Player 1 loses HUNA's token. Their other two HUNA bridges
+   (`ALOA-HUNA`, `HUNA-IFFI`) are untouched, and nothing else is removed.
+
+After the move: ELAI is controlled by player 0 (4 of 6:
+`BARI-ELAI`/`DUDA-ELAI`/`ELAI-FAAA`/`ELAI-IFFI`; `ELAI-HUNA` and
+`ELAI-JOJO` free). HUNA is uncontrolled (player 1 holds 2 of 5:
+`ALOA-HUNA`/`HUNA-IFFI`; `DUDA-HUNA`/`ELAI-HUNA`/`HUNA-LALE` free) — open
+for either player to claim on a later turn, per the "reclaiming is
+symmetric risk" point above.
 
 ## Open questions
 
-- [ ] **MUST-VERIFY #1 — Exact board graph.** The full island adjacency and
-  the exact count of bridge lines (`P`). This defines the whole action space
-  — needs tracing directly from the physical board.
+*(none — the board graph was traced from the physical board and is listed
+in Components & players above.)*
 
 ## Checklist
 
 - [x] Every rule cites a source.
-- [ ] No open questions remain unresolved. **(1 open — blocking)**
-- [ ] GameSpec and action encoding are fully specified. *(waiting on #1)*
-- [ ] A worked example is provided. *(waiting on #1)*
+- [x] No open questions remain unresolved.
+- [x] GameSpec and action encoding are fully specified.
+- [x] A worked example is provided.
 - [ ] Human verified, at the top.
