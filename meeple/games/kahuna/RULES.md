@@ -39,42 +39,14 @@ HUNA - IFFI - JOJO - KAHU
 LALE
 ```
 
-```mermaid
-graph TB
-    subgraph Row1[ ]
-        direction LR
-        ALOA --- BARI --- COCO
-    end
-    subgraph Row2[ ]
-        direction LR
-        DUDA --- ELAI --- FAAA --- GOLA
-    end
-    subgraph Row3[ ]
-        direction LR
-        HUNA --- IFFI --- JOJO --- KAHU
-    end
-    LALE
+![Kahuna board graph](board.svg)
 
-    ALOA --- DUDA
-    ALOA --- HUNA
-    BARI --- DUDA
-    BARI --- ELAI
-    BARI --- FAAA
-    COCO --- FAAA
-    COCO --- GOLA
-    COCO --- KAHU
-    DUDA --- HUNA
-    ELAI --- HUNA
-    ELAI --- IFFI
-    ELAI --- JOJO
-    FAAA --- JOJO
-    GOLA --- JOJO
-    GOLA --- KAHU
-    HUNA --- LALE
-    IFFI --- KAHU
-    IFFI --- LALE
-    KAHU --- LALE
-```
+(Mermaid's auto-layout couldn't hold this row structure without adding
+crossings, so this is a hand-placed SVG instead — same 27 lines, laid out
+on a 4-row grid matching the physical board. The 3 edges that skip past
+another island's position — `ALOA-HUNA`, `COCO-KAHU`, `IFFI-KAHU` — are
+drawn as curves bowing around the island in between, instead of straight
+lines through it.)
 
   Each island's degree (lines touching it, and its majority threshold — the
   number of bridges needed for strict majority):
