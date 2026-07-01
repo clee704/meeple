@@ -18,12 +18,14 @@ with the human via issue #14, rather than guessed:
   advantage exists and should be accounted for in eval, e.g. by
   alternating who starts across a match).
 - Hand limit (5): if your hand is already full when you'd otherwise draw,
-  you discard a card face-down first (`discard_facedown`), then draw as
-  normal — drawing itself is never blocked. The discard is strictly the
-  prelude to that draw: it's only legal while something is drawable, and
-  once made, only draw actions are legal until the turn ends. (The
-  manual's "one or more" also permits discarding extra cards; the engine
-  offers only the single discard needed to get under the limit.)
+  you discard one or more cards face-down first (`discard_facedown`),
+  then draw as normal — drawing itself is never blocked. The discards
+  are strictly the prelude to that draw: they're only legal while
+  something is drawable, and once you've started discarding, only
+  further discards and draw actions are legal until the turn ends.
+  Discarding more than the single card needed is rarely wise but is a
+  real tactic (padding the next reshuffle to delay the next scoring,
+  shedding unplayable cards, hiding known cards), so it's offered.
 - Token supply (10 per player) is a physical-component limit only; a
   digital version isn't bound by it, so it's not enforced here.
 - Premature end is checked only once scoring_count >= 1 (round 2 or 3).
@@ -167,7 +169,11 @@ class KahunaState(State):
         if self.discarded_this_turn:
             # The face-down discard is only ever the prelude to a draw (see
             # module docstring): once it's made, the turn must end with one
-            # — no more card plays, no skip.
+            # — no more card plays, no skip. Further discards are allowed
+            # first, though ("one or more", per the manual).
+            for index, island in enumerate(ISLANDS):
+                if island in hand:
+                    actions.append(DISCARD_BASE + index)
             if self.pile:
                 actions.append(DRAW_BLIND)
             actions.extend(

@@ -241,13 +241,19 @@ def test_hand_limit_blocks_drawing_until_discarded():
     assert DRAW_BLIND in after.legal_actions()  # can draw normally now
 
 
-def test_facedown_discard_forces_a_draw():
+def test_facedown_discard_forces_a_draw_but_allows_discarding_more_first():
     # The discard is only ever the prelude to a draw: once it's made, card
-    # plays and skip are no longer legal this turn -- only draw actions.
+    # plays and skip are no longer legal this turn -- only the draws, plus
+    # further face-down discards ("one or more", per the manual).
     full_hand = ("ALOA", "ALOA", "BARI", "COCO", "DUDA")
     state = _state(hands=(full_hand, ()), pile=("ELAI",), face_up=("FAAA", None, None))
     after = state.apply_action(DISCARD_BASE + ISLANDS.index("BARI"))
-    assert after.legal_actions() == [DRAW_BLIND, FACEUP_BASE + 0]
+    more_discards = [DISCARD_BASE + ISLANDS.index(i) for i in ("ALOA", "COCO", "DUDA")]
+    assert after.legal_actions() == more_discards + [DRAW_BLIND, FACEUP_BASE + 0]
+
+    again = after.apply_action(DISCARD_BASE + ISLANDS.index("COCO"))
+    assert again.hidden_discards[0] == ("BARI", "COCO")
+    assert DISCARD_BASE + ISLANDS.index("DUDA") in again.legal_actions()
 
 
 def test_facedown_discard_illegal_when_there_is_nothing_to_draw():

@@ -85,7 +85,7 @@ are each one atomic action, even though `remove` costs 2 cards at once:
     later turn.
   - **Skip** — end your turn without drawing at all. Only legal if your
     opponent did **not** also skip on their immediately preceding turn — two
-    skips can't happen back-to-back (source 2: "You may abstain from
+    skips can't happen back-to-back (sources 1 & 2: "You may abstain from
     drawing a card, unless your opponent has abstained from drawing a card
     on his turn immediately before"). Exception: when there's truly nothing
     left to draw at all, skip is always legal — an engine-level necessity
@@ -93,18 +93,19 @@ are each one atomic action, even though `remove` costs 2 cards at once:
     for good in the final phase), settled in issue #14.
 
 Hand limit is 5. If your hand is already at the limit when you'd otherwise
-draw, drawing isn't blocked — instead, discard a card face-down under the
-discard pile (without revealing which one) to get back under the limit,
-then draw as normal (source 2: "If your hand contains five island cards
-and you cannot or do not want to play any island card(s), you must place
-one or more of your cards face down under the discard pile in order to
-draw a new card"). The face-down discard exists only as the prelude to
-that draw: it's only allowed while there's actually something to draw, and
-once you've discarded you must end the turn by drawing — you can't discard
-and then skip or keep playing cards. (Engine-level details settled in
-issue #14; the manual's "one or more" also permits discarding extra cards,
-which the engine doesn't offer — only the single discard needed to get
-under the limit.)
+draw, drawing isn't blocked — instead, discard **one or more** cards
+face-down under the discard pile (without revealing which ones), then draw
+as normal (sources 1 & 2: "If your hand contains five island cards and you
+cannot or do not want to play any island card(s), you must place one or
+more of your cards face down under the discard pile in order to draw a new
+card"). The face-down discards exist only as the prelude to that draw:
+they're only allowed while there's actually something to draw, and once
+you've started discarding you must end the turn by drawing — you can't
+discard and then skip or go back to playing cards. Discarding more than
+the single card needed is rarely wise but is a real tactic: it pads the
+next reshuffled pile (delaying the next scoring), sheds cards you can't
+legally play, and hides cards the opponent has seen you take. (Engine-level
+details settled in issue #14.)
 
 ```mermaid
 flowchart TD
@@ -260,9 +261,10 @@ table below):
 - `139` → end turn, skip the draw
 - `140 .. 151` → discard one card face-down, naming the island at index
   `i - 140` in the (alphabetically sorted) island list — the hand-limit
-  action described in Turn structure, legal only while your hand is at the
-  limit and something is left to draw; after it, only the draw actions are
-  legal until the turn ends
+  action described in Turn structure, legal while your hand is at the
+  limit (or you've already discarded this turn — "one or more") and
+  something is left to draw; once you've started discarding, only further
+  discards and the draw actions are legal until the turn ends
 
 (Exactly how face-up slots are indexed as they get refilled is an
 implementation detail to pin down when the engine is built, not a rules
@@ -293,7 +295,8 @@ always legal). Draw-blind is legal only while the face-down pile is
 nonempty; each currently-filled face-up slot is legal. If your hand is at
 the limit, draw-blind and take-faceup are illegal and the face-down
 discard actions are offered instead (only while a draw is available);
-after discarding, only the draw actions are legal until the turn ends.
+after discarding, only further face-down discards and the draw actions
+are legal until the turn ends.
 
 ## Information-state tensor (for Deep CFR)
 
