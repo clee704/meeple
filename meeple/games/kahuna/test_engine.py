@@ -28,7 +28,7 @@ def _state(**overrides) -> KahunaState:
         face_up=(None, None, None),
         pile=(),
         discard=(),
-        current_player=0,
+        to_move=0,
         pending=(),
         pending_reason="turn",
         scores=(0.0, 0.0),
@@ -69,9 +69,9 @@ def test_initial_deal_gives_each_player_3_cards_and_3_faceup_and_player0_starts(
         outcomes, probs = zip(*state.chance_outcomes(), strict=True)
         action = rng.choices(outcomes, weights=probs, k=1)[0]
         state = state.apply_action(action)
-    assert len(state._hands[0]) == 3
-    assert len(state._hands[1]) == 3
-    assert all(c is not None for c in state._face_up)
+    assert len(state.hands[0]) == 3
+    assert len(state.hands[1]) == 3
+    assert all(c is not None for c in state.face_up)
     assert state.current_player() == 0
 
 
@@ -112,10 +112,10 @@ def test_place_a_and_place_b_discard_different_cards():
     state = _state(hands=(("ELAI", "HUNA"), ()))
     after_a = state.apply_action(PLACE_A_BASE + pos)
     after_b = state.apply_action(PLACE_B_BASE + pos)
-    assert after_a._hands[0] == ("HUNA",)
-    assert after_a._discard == ("ELAI",)
-    assert after_b._hands[0] == ("ELAI",)
-    assert after_b._discard == ("HUNA",)
+    assert after_a.hands[0] == ("HUNA",)
+    assert after_a.discard == ("ELAI",)
+    assert after_b.hands[0] == ("ELAI",)
+    assert after_b.discard == ("HUNA",)
 
 
 def test_remove_variants_discard_different_card_combinations():
@@ -124,10 +124,10 @@ def test_remove_variants_discard_different_card_combinations():
     state = _state(bridges=_bridges_with(("ELAI", "HUNA", 1)), hands=(hand, ()))
     after_aa = state.apply_action(REMOVE_AA_BASE + pos)
     after_ab = state.apply_action(REMOVE_AB_BASE + pos)
-    assert after_aa._hands[0] == ("HUNA",)
-    assert after_aa._discard == ("ELAI", "ELAI")
-    assert after_ab._hands[0] == ("ELAI",)
-    assert after_ab._discard == ("ELAI", "HUNA")
+    assert after_aa.hands[0] == ("HUNA",)
+    assert after_aa.discard == ("ELAI", "ELAI")
+    assert after_ab.hands[0] == ("ELAI",)
+    assert after_ab.discard == ("ELAI", "HUNA")
 
 
 # --- majority / control, including the even-degree case -----------------
@@ -168,10 +168,10 @@ def test_worked_example_regression_elai_huna_ripple():
     assert after._controller("ELAI") == 0
     assert after._controller("HUNA") is None  # dethroned, not captured
     # player 1's other HUNA bridges are untouched:
-    assert after._bridges[BRIDGES.index(("ALOA", "HUNA"))] == 1
-    assert after._bridges[BRIDGES.index(("HUNA", "IFFI"))] == 1
+    assert after.bridges[BRIDGES.index(("ALOA", "HUNA"))] == 1
+    assert after.bridges[BRIDGES.index(("HUNA", "IFFI"))] == 1
     # the stripped bridge returns to the supply (free), not owned by anyone:
-    assert after._bridges[BRIDGES.index(("ELAI", "HUNA"))] is None
+    assert after.bridges[BRIDGES.index(("ELAI", "HUNA"))] is None
 
 
 def test_dethroning_does_not_grant_first_claim_to_reclaim():
@@ -182,7 +182,7 @@ def test_dethroning_does_not_grant_first_claim_to_reclaim():
         ("ALOA", "HUNA", 1),
         ("HUNA", "IFFI", 1),
     )
-    state = _state(bridges=bridges, hands=((), ("DUDA",)), current_player=1)
+    state = _state(bridges=bridges, hands=((), ("DUDA",)), to_move=1)
     assert state._controller("HUNA") is None
     pos = BRIDGES.index(("DUDA", "HUNA"))
     after = state.apply_action(PLACE_A_BASE + pos)
@@ -217,7 +217,7 @@ def test_skip_always_legal_when_nothing_to_draw():
 def test_take_faceup_is_a_deliberate_pick_not_chance():
     state = _state(face_up=("ALOA", None, None), pile=())
     after = state.apply_action(FACEUP_BASE + 0)
-    assert after._hands[0] == ("ALOA",)
+    assert after.hands[0] == ("ALOA",)
     assert after.current_player() != CHANCE  # no pile to refill from
 
 
@@ -235,9 +235,9 @@ def test_hand_limit_blocks_drawing_until_discarded():
     assert DISCARD_BASE + island_idx in legal
 
     after = state.apply_action(DISCARD_BASE + island_idx)
-    assert len(after._hands[0]) == HAND_LIMIT - 1
-    assert full_hand[0] in after._discard_hidden  # discarded face-down, not to the open pile
-    assert full_hand[0] not in after._discard
+    assert len(after.hands[0]) == HAND_LIMIT - 1
+    assert full_hand[0] in after.discard_hidden  # discarded face-down, not to the open pile
+    assert full_hand[0] not in after.discard
     assert DRAW_BLIND in after.legal_actions()  # can draw normally now
 
 
@@ -258,9 +258,9 @@ def test_facedown_discard_identity_is_hidden_but_count_is_not():
 def test_facedown_and_open_discards_both_get_reshuffled_into_the_pile():
     state = _state(pile=("ALOA",), discard=("BARI",), discard_hidden=("COCO",))
     after = _deplete_pile_and_faceup(state)
-    assert after._discard == ()
-    assert after._discard_hidden == ()
-    assert sorted(after._pile) + sorted(c for c in after._face_up if c) == sorted(["BARI", "COCO"])
+    assert after.discard == ()
+    assert after.discard_hidden == ()
+    assert sorted(after.pile) + sorted(c for c in after.face_up if c) == sorted(["BARI", "COCO"])
 
 
 def test_discard_facedown_requires_a_matching_card():
@@ -293,9 +293,11 @@ def test_interim_scoring_1_awards_one_point_to_the_leader():
     )
     state = _state(bridges=bridges, pile=("ALOA",), discard=("BARI",))
     after = _deplete_pile_and_faceup(state)
-    assert after._scores == (1.0, 0.0)
-    assert after._scoring_count == 1
-    assert len(after._face_up) == 3  # reshuffled and redealt (once chance resolves)
+    assert after.scores == (1.0, 0.0)
+    assert after.scoring_count == 1
+    # The lone discard (BARI) was reshuffled and redealt face-up.
+    assert after.face_up == ("BARI", None, None)
+    assert after.pile == ()
 
 
 def test_interim_scoring_2_awards_two_points():
@@ -304,16 +306,16 @@ def test_interim_scoring_2_awards_two_points():
     bridges = _bridges_with(("ALOA", "BARI", 1), ("ALOA", "DUDA", 1), ("GOLA", "KAHU", 0))
     state = _state(bridges=bridges, pile=("ALOA",), scoring_count=1, discard=("BARI",))
     after = _deplete_pile_and_faceup(state)
-    assert after._scores == (0.0, 2.0)
-    assert after._scoring_count == 2
+    assert after.scores == (0.0, 2.0)
+    assert after.scoring_count == 2
 
 
 def test_third_depletion_starts_final_turns_instead_of_scoring_immediately():
     state = _state(pile=("ALOA",), scoring_count=2)
     after = _deplete_pile_and_faceup(state)
-    assert after._scoring_count == 3
-    assert after._final_turns_remaining == 2
-    assert after._scores == (0.0, 0.0)  # not scored yet -- one more turn each first
+    assert after.scoring_count == 3
+    assert after.final_turns_remaining == 2
+    assert after.scores == (0.0, 0.0)  # not scored yet -- one more turn each first
     assert not after.is_terminal()
 
 
@@ -322,9 +324,9 @@ def test_skip_does_not_retrigger_scoring_without_a_new_draw():
     # re-fire scoring just because the depleted condition still holds.
     state = _state(pile=("ALOA",), discard=("BARI",))
     after = _deplete_pile_and_faceup(state)
-    assert after._scoring_count == 1
+    assert after.scoring_count == 1
     after_skip = after.apply_action(SKIP)
-    assert after_skip._scoring_count == 1
+    assert after_skip.scoring_count == 1
 
 
 def test_reshuffle_with_empty_discard_cascades_through_remaining_scorings():
@@ -337,11 +339,11 @@ def test_reshuffle_with_empty_discard_cascades_through_remaining_scorings():
     bridges = _bridges_with(("ALOA", "BARI", 0), ("ALOA", "DUDA", 0), ("GOLA", "KAHU", 1))
     state = _state(bridges=bridges, pile=("ALOA",), discard=())
     after = _deplete_pile_and_faceup(state)
-    assert after._scoring_count == 3
-    assert after._final_turns_remaining == 2
-    assert after._scores == (3.0, 0.0)  # +1 (round 1) and +2 (round 2), both to player 0
-    assert after._pile == ()
-    assert after._face_up == (None, None, None)
+    assert after.scoring_count == 3
+    assert after.final_turns_remaining == 2
+    assert after.scores == (3.0, 0.0)  # +1 (round 1) and +2 (round 2), both to player 0
+    assert after.pile == ()
+    assert after.face_up == (None, None, None)
 
 
 def test_final_scoring_awards_exact_island_difference():
@@ -359,7 +361,7 @@ def test_final_scoring_awards_exact_island_difference():
     )
     state = _state(
         bridges=bridges,
-        current_player=1,
+        to_move=1,
         scoring_count=3,
         final_turns_remaining=1,
         previous_turn_was_skip=False,
@@ -384,13 +386,13 @@ def test_tiebreak_falls_back_to_final_round_winner():
         scores=(2.0, 1.0),
         scoring_count=3,
         final_turns_remaining=1,
-        current_player=0,
+        to_move=0,
         bridges=_bridges_with(("ALOA", "BARI", 1), ("ALOA", "DUDA", 1), ("GOLA", "KAHU", 0)),
     )
     after = state.apply_action(SKIP)
     assert after.is_terminal()
-    assert after._premature_winner is None  # resolved via the tiebreak, not this
-    assert after._scores == (2.0, 2.0)  # tied overall
+    assert after.premature_winner is None  # resolved via the tiebreak, not this
+    assert after.scores == (2.0, 2.0)  # tied overall
     assert after.returns() == [0.0, 0.0]  # zero-sum payoff is genuinely tied
     assert after.winner() == 1  # but player 1 won the final round
 
@@ -405,22 +407,22 @@ def test_tiebreak_falls_back_to_bridge_count_when_final_round_is_also_tied():
         scores=(1.0, 1.0),
         scoring_count=3,
         final_turns_remaining=1,
-        current_player=0,
+        to_move=0,
         bridges=_bridges_with(("ALOA", "BARI", 0), ("COCO", "FAAA", 0), ("GOLA", "KAHU", 1)),
     )
     after = state.apply_action(SKIP)
     assert after.is_terminal()
-    assert after._scores == (1.0, 1.0)
-    assert after._premature_winner is None  # genuinely resolved via the tiebreak, not this
-    assert after._final_round_winner is None  # final round itself was a tie too
+    assert after.scores == (1.0, 1.0)
+    assert after.premature_winner is None  # genuinely resolved via the tiebreak, not this
+    assert after.final_round_winner is None  # final round itself was a tie too
     assert after.winner() == 0  # player 0 has 2 bridges on the board vs player 1's 1
 
 
 def test_no_winner_when_everything_is_tied():
-    state = _state(scores=(1.0, 1.0), scoring_count=3, final_turns_remaining=1, current_player=0)
+    state = _state(scores=(1.0, 1.0), scoring_count=3, final_turns_remaining=1, to_move=0)
     after = state.apply_action(SKIP)
     assert after.is_terminal()
-    assert after._premature_winner is None  # a fully empty board isn't premature end
+    assert after.premature_winner is None  # a fully empty board isn't premature end
     assert after.winner() is None
 
 
@@ -446,10 +448,10 @@ def test_premature_end_when_a_player_has_zero_bridges_in_round_2_or_later():
 
 
 def test_final_scoring_tie_awards_no_points():
-    state = _state(scoring_count=3, final_turns_remaining=1, current_player=0)
+    state = _state(scoring_count=3, final_turns_remaining=1, to_move=0)
     after = state.apply_action(SKIP)
     assert after.is_terminal()
-    assert after._scores == (0.0, 0.0)
+    assert after.scores == (0.0, 0.0)
 
 
 # --- terminal-state guards ------------------------------------------------
@@ -481,6 +483,8 @@ def test_illegal_chance_action_rejected():
     state = _state(pile=("ALOA",), pending=("hand0",), pending_reason="turn")
     with pytest.raises(ValueError):
         state.apply_action(ISLANDS.index("BARI"))  # BARI isn't in the pile
+    with pytest.raises(ValueError):
+        state.apply_action(SKIP)  # not an island index at all
 
 
 def test_premature_end_does_not_apply_in_round_1():
@@ -500,7 +504,7 @@ def test_premature_end_is_detected_even_when_zero_bridges_predates_the_check():
     # on the *next* turn-ending action -- even a plain skip that never
     # touches the board -- once round 2 begins, not sit latent until
     # someone happens to play a place/remove.
-    state = _state(bridges=_bridges_with(("ALOA", "BARI", 0)), scoring_count=1, current_player=1)
+    state = _state(bridges=_bridges_with(("ALOA", "BARI", 0)), scoring_count=1, to_move=1)
     assert not state.is_terminal()  # player 1 already has 0 bridges, but not yet re-checked
     after = state.apply_action(SKIP)
     assert after.is_terminal()
@@ -566,6 +570,6 @@ def test_played_card_this_turn_is_tracked_and_visible_in_information_state():
     before = _state(hands=(("ALOA", "BARI"), ()))
     pos = BRIDGES.index(("ALOA", "BARI"))
     after = before.apply_action(PLACE_A_BASE + pos)
-    assert after._played_card_this_turn is True
+    assert after.played_card_this_turn is True
     assert after.information_state_key(0) != before.information_state_key(0)
     assert after.information_state_tensor(0).tolist() != before.information_state_tensor(0).tolist()
