@@ -5,7 +5,7 @@
 > written for this game until it's filled in, sourced, and checked off below.
 >
 > Most of the rules below are already verified against the sources cited.
-> **Three open questions remain and block engine coding** — resolve them
+> **Two open questions remain and block engine coding** — resolve them
 > against the physical rulebook before implementing `legal_actions` or
 > scoring.
 
@@ -41,13 +41,20 @@ several islands from your opponent's control to yours in one move.
 ## Turn structure
 
 On your turn you can play any number of island cards (including zero), then
-you must draw exactly one card. Hand limit is 5. Each played card is one
-individual action:
+you must draw exactly one card. Hand limit is 5. `place` and `remove` are
+each one atomic action, even though `remove` costs 2 cards at once:
 
 - **`place(bridge_pos)`** — discard 1 card naming an island at either end of
   an empty bridge line, and place your bridge there.
-- **`remove(bridge_pos)`** — remove one of your opponent's bridges. Which
-  cards this costs is still an open question — see Open question #2.
+- **`remove(bridge_pos)`** — remove one of your opponent's bridges, by
+  discarding 2 cards, in one of two ways:
+  - **Same island, twice:** discard 2 cards naming the *same* island to
+    remove any one opponent bridge touching that island (your choice of
+    which one, if they own more than one there).
+  - **Two different islands:** discard 2 cards naming two *different*
+    islands to remove the specific opponent bridge that directly connects
+    those two islands (only legal if that exact bridge line exists and your
+    opponent owns it).
 - **`end_turn`** — stop playing cards for this turn; this is what triggers
   the draw.
 
@@ -135,9 +142,10 @@ integer scheme:
 - `2P` → `end_turn`
 
 where `P` is the number of bridge positions. `legal_actions()` filters these
-down by: the line is free and you hold the required card (`place`); your
-opponent owns that bridge and you hold the required card(s) (`remove`);
-`end_turn` is always legal.
+down by: the line is free and you hold a card naming one of its endpoint
+islands (`place`); your opponent owns that bridge and you hold either 2 cards
+naming one of its endpoint islands, or 1 card naming each endpoint island
+(`remove`); `end_turn` is always legal.
 
 ## Information-state tensor (for Deep CFR)
 
@@ -160,9 +168,6 @@ neighboring island too), so the cascade logic has a concrete regression test.
 - [ ] **MUST-VERIFY #1 — Exact board graph.** The full island adjacency and
   the exact count of bridge lines (`P`). This defines the whole action space
   — needs tracing directly from the physical board.
-- [ ] **MUST-VERIFY #2 — Removal cost.** Which cards do you have to discard
-  to remove a bridge? Likely the two island cards at that bridge's endpoints,
-  but this needs confirming.
 - [ ] **MUST-VERIFY #3 — Draw mechanics.** Can you draw from the 3 face-up
   cards as well as the face-down pile, and if a face-up slot is taken, how
   does it get refilled?
@@ -170,7 +175,7 @@ neighboring island too), so the cascade logic has a concrete regression test.
 ## Checklist
 
 - [x] Every rule cites a source.
-- [ ] No open questions remain unresolved. **(3 open — blocking)**
+- [ ] No open questions remain unresolved. **(2 open — blocking)**
 - [ ] GameSpec and action encoding are fully specified. *(waiting on #1)*
 - [ ] A worked example is provided. *(waiting on #1)*
 - [ ] Human verified, at the top.
