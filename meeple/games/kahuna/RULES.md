@@ -108,12 +108,18 @@ through slowly:
   island that just lost its token isn't captured by anyone, it's just open.
   The actual cascade plays out over **later turns**: since that island now
   has no majority holder, either player can place new bridges on its
-  remaining free lines to claim it. If you're the one who claims it, that
-  triggers the exact same "take the token, strip the opponent's remaining
-  bridges there" event on *that* island — which can, in turn, cost the
-  opponent their token on yet another neighbor. It's this repeatable,
-  turn-by-turn tug-of-war over newly-vulnerable islands that makes board
-  position matter, not an instant chain reaction within one move.
+  remaining free lines to claim it.
+- **Dethroning is a risk, not a free gain.** Whoever reclaims that
+  now-open island triggers the "take the token, strip the *other* player's
+  remaining bridges there" event — and that cuts both ways. If you're the
+  one who caused the opponent to lose their token there, you don't have
+  first claim on it; if the opponent gets there first and builds their own
+  new majority, it's now **your** bridges on that island that get stripped,
+  not theirs. Knocking an opponent off an island opens a contested space
+  that either side can end up winning — which is what keeps this a
+  repeatable, turn-by-turn tug-of-war rather than a one-way ratchet in your
+  favor, and why board position (who can reach a vulnerable island first)
+  matters as much as the initial move that opened it up.
 - Because one `place` only touches one line, and a line only has 2 endpoint
   islands, a single action can only ever directly change bridge counts on
   those 2 islands — so there's no wider board-wide sweep needed after a
