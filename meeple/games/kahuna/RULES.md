@@ -29,16 +29,6 @@ part of the game.
 - **12 islands** connected by **27 bridge lines**, traced from the physical
   board:
 
-The board is laid out in 4 rows (this matches the physical board, and is
-why the diagram below is grouped the way it is):
-
-```
-ALOA - BARI - COCO
-DUDA - ELAI - FAAA - GOLA
-HUNA - IFFI - JOJO - KAHU
-LALE
-```
-
 ![Kahuna board graph](board.svg)
 
 (Mermaid's auto-layout couldn't hold this structure without adding
