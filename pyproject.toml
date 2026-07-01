@@ -10,7 +10,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Oracle-only, never a game backend (CLAUDE.md G6) — install on demand.
+# Used only to cross-check native engines in tests, never a game backend — install on demand.
 openspiel = ["open-spiel>=1.5"]
 web = ["fastapi>=0.110", "uvicorn>=0.30"]
 
@@ -59,7 +59,7 @@ min_confidence = 80
 known_first_party = ["meeple"]
 
 [tool.deptry.per_rule_ignores]
-# fastapi/uvicorn are optional extras (web), not used until Phase 9.
+# fastapi/uvicorn are optional extras for the (not yet built) web backend.
 DEP002 = ["fastapi", "uvicorn"]
 # pytest/open-spiel are dev-only but imported from co-located test_*.py files,
 # which deptry doesn't auto-detect as tests outside a tests/ directory.
