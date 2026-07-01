@@ -11,22 +11,22 @@ which of the line's two endpoint islands the discarded card names;
 encoding section shows; see that section (updated to match) for the
 current numbering.
 
-RULES.md doesn't pin down every other engine-level detail. Assumptions
-made here, each also filed as a tech-debt item for a rulebook re-check:
+A few engine-level details RULES.md doesn't cover were settled directly
+with the human via issue #14, rather than guessed:
 
-A1. Player 0 moves first (not stated in RULES.md; arbitrary/symmetric).
-A2. Hand limit (5) is tracked but not enforced as a hard block on drawing —
-    RULES.md doesn't say whether it forces a discard or blocks the draw,
-    and blocking risks a deadlock (see A5).
-A3. Token supply (10 per player) isn't separately capped; control is
-    derived from bridge majority, and bridge supply (25, which *is*
-    enforced) makes exceeding 10 controlled islands extremely unlikely.
-A4. "Premature end" is checked after every bridge removal, but only once
-    scoring_count >= 1 (i.e. during round 2 or round 3, not round 1).
-A5. Skip is allowed even after an immediately-preceding skip if there is
-    truly nothing to draw (empty pile and no face-up cards) — otherwise the
-    final "one more turn each" phase (where the deck is permanently empty)
-    could deadlock under the literal no-double-skip rule.
+- Player 0 moves first (arbitrary/symmetric — but real first-move
+  advantage exists and should be accounted for in eval, e.g. by
+  alternating who starts across a match).
+- Hand limit (5): if your hand is already full when you'd otherwise draw,
+  you discard face-down card(s) first (`discard_facedown`), then draw as
+  normal — drawing itself is never blocked.
+- Token supply (10 per player) is a physical-component limit only; a
+  digital version isn't bound by it, so it's not enforced here.
+- Premature end is checked only once scoring_count >= 1 (round 2 or 3).
+- Skip is allowed regardless of the no-double-skip rule whenever there's
+  truly nothing to draw — this only ever arises in the final "one more
+  turn each" phase, where the deck is permanently empty, so it can't be
+  exploited to skip repeatedly during normal play.
 """
 
 import torch
@@ -38,6 +38,7 @@ from meeple.games.kahuna.graph import BRIDGES, ISLAND_BRIDGES, ISLANDS, MAJORITY
 NUM_ISLANDS = len(ISLANDS)
 BRIDGE_SUPPLY = 25
 NUM_FACEUP_SLOTS = 3
+HAND_LIMIT = 5
 
 # place/remove are split by exactly which card(s) they spend — see module
 # docstring. `a`/`b` below always mean BRIDGES[pos][0]/BRIDGES[pos][1].
@@ -49,7 +50,8 @@ REMOVE_AB_BASE = 4 * NUM_BRIDGES
 DRAW_BLIND = 5 * NUM_BRIDGES
 FACEUP_BASE = DRAW_BLIND + 1
 SKIP = FACEUP_BASE + NUM_FACEUP_SLOTS
-NUM_ACTIONS = SKIP + 1
+DISCARD_BASE = SKIP + 1
+NUM_ACTIONS = DISCARD_BASE + NUM_ISLANDS
 
 DECK: tuple[str, ...] = tuple(sorted(ISLANDS * 2))  # 24 cards, 2 per island
 
@@ -62,6 +64,7 @@ _ACTION_NAMES = (
     + ("draw_blind",)
     + tuple(f"take_faceup_{j}" for j in range(NUM_FACEUP_SLOTS))
     + ("skip",)
+    + tuple(f"discard_facedown({island})" for island in ISLANDS)
 )
 
 
@@ -99,12 +102,18 @@ class KahunaState(State):
         final_turns_remaining: int | None,
         premature_winner: int | None,
         final_round_winner: int | None = None,
+        discard_hidden: tuple[str, ...] = (),
     ):
         self._bridges = bridges
         self._hands = hands
         self._face_up = face_up
         self._pile = pile
         self._discard = discard
+        # Cards discarded face-down for the hand limit (see RULES.md's Turn
+        # structure): these get reshuffled into the pile just like `discard`,
+        # but their identity must stay hidden from the opponent's
+        # information state (see information_state_key/tensor below).
+        self._discard_hidden = discard_hidden
         self._current_player = current_player
         self._pending = pending
         self._pending_reason = pending_reason
@@ -167,11 +176,18 @@ class KahunaState(State):
             if a in hand and b in hand:
                 actions.append(REMOVE_AB_BASE + pos)
 
-        if self._pile:
-            actions.append(DRAW_BLIND)
-        for j, card in enumerate(self._face_up):
-            if card is not None:
-                actions.append(FACEUP_BASE + j)
+        if len(hand) >= HAND_LIMIT:
+            # Hand limit: discard face-down first, then draw as normal --
+            # drawing itself is never directly blocked (see module docstring).
+            for island in ISLANDS:
+                if island in hand:
+                    actions.append(DISCARD_BASE + ISLANDS.index(island))
+        else:
+            if self._pile:
+                actions.append(DRAW_BLIND)
+            for j, card in enumerate(self._face_up):
+                if card is not None:
+                    actions.append(FACEUP_BASE + j)
 
         nothing_to_draw = not self._pile and all(c is None for c in self._face_up)
         skip_allowed = (
@@ -206,7 +222,9 @@ class KahunaState(State):
             return self._replace(pending=(f"hand{self._current_player}",), pending_reason="turn")
         if FACEUP_BASE <= action < SKIP:
             return self._apply_take_faceup(action - FACEUP_BASE)
-        return self._apply_skip()
+        if action == SKIP:
+            return self._apply_skip()
+        return self._apply_discard_facedown(ISLANDS[action - DISCARD_BASE])
 
     def is_terminal(self) -> bool:
         if self._premature_winner is not None:
@@ -261,6 +279,7 @@ class KahunaState(State):
                 self._bridges,
                 self._face_up,
                 self._discard,
+                len(self._discard_hidden),  # count is public; identities aren't
                 len(self._pile),
                 self._current_player,
                 self._pending_reason if self._pending else None,
@@ -288,6 +307,7 @@ class KahunaState(State):
             values.append(float(sum(1 for c in self._face_up if c == island)))
         for island in ISLANDS:
             values.append(float(self._discard.count(island)))
+        values.append(float(len(self._discard_hidden)))  # count is public; identities aren't
         values.append(float(len(self._pile)))
         values.append(self._scores[player])
         values.append(self._scores[1 - player])
@@ -307,6 +327,7 @@ class KahunaState(State):
             face_up=self._face_up,
             pile=self._pile,
             discard=self._discard,
+            discard_hidden=self._discard_hidden,
             current_player=self._current_player,
             pending=self._pending,
             pending_reason=self._pending_reason,
@@ -391,6 +412,15 @@ class KahunaState(State):
     def _apply_skip(self) -> "KahunaState":
         return self._finish_turn(was_skip=True)
 
+    def _apply_discard_facedown(self, island: str) -> "KahunaState":
+        player = self._current_player
+        hands = list(self._hands)
+        hands[player] = _remove_first(hands[player], island)
+        return self._replace(
+            hands=tuple(hands),
+            discard_hidden=tuple(sorted(self._discard_hidden + (island,))),
+        )
+
     def _finish_turn(self, was_skip: bool = False, just_drew: bool = False) -> "KahunaState":
         state = self._replace(previous_turn_was_skip=was_skip)
         just_entered_final_phase = False
@@ -425,13 +455,17 @@ class KahunaState(State):
         elif p1 > p0:
             scores[1] += points
 
-        new_pile = tuple(sorted(self._discard))
+        # Both the openly-discarded and face-down-discarded cards go back
+        # into the pile — the face-down/hidden distinction only matters for
+        # what's visible *before* a reshuffle, not for what gets reshuffled.
+        new_pile = tuple(sorted(self._discard + self._discard_hidden))
         num_to_deal = min(NUM_FACEUP_SLOTS, len(new_pile))
         state = self._replace(
             scores=tuple(scores),
             scoring_count=scoring_count,
             pile=new_pile,
             discard=(),
+            discard_hidden=(),
             face_up=(None, None, None),
             pending=tuple(f"faceup{j}" for j in range(num_to_deal)),
             pending_reason="reshuffle",
@@ -496,7 +530,7 @@ class KahunaGame(Game):
             face_up=(None, None, None),
             pile=DECK,
             discard=(),
-            current_player=0,  # A1: player 0 moves first
+            current_player=0,  # player 0 moves first (see module docstring)
             pending=deal_order,
             pending_reason="setup",
             scores=(0.0, 0.0),

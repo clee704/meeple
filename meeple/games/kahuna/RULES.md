@@ -85,9 +85,13 @@ are each one atomic action, even though `remove` costs 2 cards at once:
     later turn.
   - **Skip** — end your turn without drawing at all. Only legal if your
     opponent did **not** also skip on their immediately preceding turn — two
-    skips can't happen back-to-back.
+    skips can't happen back-to-back (unless there's truly nothing left to
+    draw at all, in which case skip is always legal).
 
-Hand limit is 5.
+Hand limit is 5. If your hand is already at the limit when you'd otherwise
+draw, drawing isn't blocked — instead, discard card(s) face-down first (to
+the discard pile, without revealing which ones) until you're back under
+the limit, then draw as normal.
 
 ```mermaid
 flowchart TD
@@ -170,10 +174,13 @@ tokens per player, in total. Running out limits what you can still play.
 
 - **Public**: the whole board (every bridge and who owns it), both players'
   placed tokens, the scores, which round it is, remaining bridge/token
-  supplies, the 3 face-up cards, and whether the previous turn ended in a
-  skip (needed to know if skipping is currently legal).
-- **Hidden**: what's in each player's hand, and the order of the face-down
-  pile.
+  supplies, the 3 face-up cards, whether the previous turn ended in a skip
+  (needed to know if skipping is currently legal), and *how many* cards
+  have been discarded face-down for the hand limit (but not which ones).
+- **Hidden**: what's in each player's hand, the order of the face-down
+  pile, and the specific identity of any card discarded face-down for the
+  hand limit (as opposed to a card spent on `place`/`remove`, which is
+  openly played and so stays visible).
 - **Random events**: drawing blind from the face-down pile — whether as
   your own draw, or as the automatic refill after someone takes a face-up
   card. Taking a specific face-up card is a visible, deliberate choice, not
@@ -214,7 +221,7 @@ num_players           = 2
 perfect_information   = False
 has_chance            = True
 zero_sum              = True
-num_distinct_actions  = 5 * 27 + 5 = 140   # see Action encoding below (P=27)
+num_distinct_actions  = 5 * 27 + 5 + 12 = 152   # see Action encoding below (P=27)
 ```
 
 ## Action encoding
@@ -235,6 +242,10 @@ table below):
 - `135` → end turn, draw blind from the face-down pile
 - `136 .. 138` → end turn, take face-up slot `j` (`j` in 0..2)
 - `139` → end turn, skip the draw
+- `140 .. 151` → discard one card face-down, naming the island at index
+  `i - 140` in the (alphabetically sorted) island list — the hand-limit
+  action described in Turn structure, legal only while your hand is at the
+  limit
 
 (Exactly how face-up slots are indexed as they get refilled is an
 implementation detail to pin down when the engine is built, not a rules
@@ -258,11 +269,12 @@ island names:
 `legal_actions()` filters these down by: the line is free and you hold a
 card naming the specific endpoint island that variant spends (`place`);
 your opponent owns that bridge and you hold the specific card(s) that
-variant spends — 2 of one endpoint, or 1 of each (`remove`); draw-blind and
-each currently-filled face-up slot are always legal; skip is legal only if
-the opponent's immediately preceding turn wasn't itself a skip (unless
-there's genuinely nothing left to draw, in which case skip is always
-legal).
+variant spends — 2 of one endpoint, or 1 of each (`remove`); skip is legal
+only if the opponent's immediately preceding turn wasn't itself a skip
+(unless there's genuinely nothing left to draw, in which case skip is
+always legal). If your hand is at the limit, draw-blind and take-faceup
+are illegal and only the face-down discard actions are offered instead;
+otherwise draw-blind and each currently-filled face-up slot are legal.
 
 ## Information-state tensor (for Deep CFR)
 

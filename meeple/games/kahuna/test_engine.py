@@ -4,8 +4,10 @@ import pytest
 
 from meeple.framework.game import CHANCE, State
 from meeple.games.kahuna.engine import (
+    DISCARD_BASE,
     DRAW_BLIND,
     FACEUP_BASE,
+    HAND_LIMIT,
     NUM_BRIDGES,
     PLACE_A_BASE,
     PLACE_B_BASE,
@@ -16,7 +18,7 @@ from meeple.games.kahuna.engine import (
     KahunaGame,
     KahunaState,
 )
-from meeple.games.kahuna.graph import BRIDGES
+from meeple.games.kahuna.graph import BRIDGES, ISLANDS
 
 
 def _state(**overrides) -> KahunaState:
@@ -217,6 +219,54 @@ def test_take_faceup_is_a_deliberate_pick_not_chance():
     after = state.apply_action(FACEUP_BASE + 0)
     assert after._hands[0] == ("ALOA",)
     assert after.current_player() != CHANCE  # no pile to refill from
+
+
+# --- hand limit: discard face-down first, then draw as normal ------------
+
+
+def test_hand_limit_blocks_drawing_until_discarded():
+    full_hand = tuple(ISLANDS[:HAND_LIMIT])
+    assert len(full_hand) == HAND_LIMIT
+    state = _state(hands=(full_hand, ()), pile=("ALOA",), face_up=("BARI", None, None))
+    legal = state.legal_actions()
+    assert DRAW_BLIND not in legal
+    assert FACEUP_BASE + 0 not in legal
+    island_idx = ISLANDS.index(full_hand[0])
+    assert DISCARD_BASE + island_idx in legal
+
+    after = state.apply_action(DISCARD_BASE + island_idx)
+    assert len(after._hands[0]) == HAND_LIMIT - 1
+    assert full_hand[0] in after._discard_hidden  # discarded face-down, not to the open pile
+    assert full_hand[0] not in after._discard
+    assert DRAW_BLIND in after.legal_actions()  # can draw normally now
+
+
+def test_facedown_discard_identity_is_hidden_but_count_is_not():
+    # Same number of face-down discards, different specific cards: the
+    # count is public (comparable to pile size), but which cards they are
+    # must not leak into either player's information state.
+    aloa = _state(discard_hidden=("ALOA",))
+    bari = _state(discard_hidden=("BARI",))
+    assert aloa.information_state_key(1) == bari.information_state_key(1)
+    assert aloa.information_state_tensor(1).tolist() == bari.information_state_tensor(1).tolist()
+
+    # A different *count* is a genuinely different, visible state.
+    two_hidden = _state(discard_hidden=("ALOA", "BARI"))
+    assert aloa.information_state_key(1) != two_hidden.information_state_key(1)
+
+
+def test_facedown_and_open_discards_both_get_reshuffled_into_the_pile():
+    state = _state(pile=("ALOA",), discard=("BARI",), discard_hidden=("COCO",))
+    after = _deplete_pile_and_faceup(state)
+    assert after._discard == ()
+    assert after._discard_hidden == ()
+    assert sorted(after._pile) + sorted(c for c in after._face_up if c) == sorted(["BARI", "COCO"])
+
+
+def test_discard_facedown_requires_a_matching_card():
+    state = _state(hands=(("ALOA",), ()))
+    with pytest.raises(ValueError):
+        state.apply_action(DISCARD_BASE + ISLANDS.index("BARI"))
 
 
 # --- scoring: interim, final, tiebreak, premature end --------------------
@@ -444,7 +494,7 @@ def test_spec_matches_rules_md():
     assert spec.perfect_information is False
     assert spec.has_chance is True
     assert spec.zero_sum is True
-    assert spec.num_distinct_actions == 140
+    assert spec.num_distinct_actions == 152
 
 
 def test_information_state_key_hides_opponent_hand():
