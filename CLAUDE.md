@@ -1,34 +1,53 @@
 # CLAUDE.md — Operating contract for MeepleMind
 
 > **Read this fully at the start of every session, before doing anything.**
-> Then read `PLAN.md` (the roadmap). If you are working on a specific
-> game, also read `games/<game>/RULES.md`. Work within the current phase only.
+> Then read `PLAN.md` — project identity, goals, and the roadmap live there,
+> not here. If you are working on a specific game, also read
+> `games/<game>/RULES.md`.
 >
 > This file exists so that a *smaller/cheaper model* can continue the project
 > safely. It is intentionally prescriptive. When in doubt, follow the gates
 > below literally and escalate to the human rather than improvising.
+>
+> **No rule here is beyond question.** These are defaults that make sense most
+> of the time, not dogma. If one stops making sense for what's actually in
+> front of you, say so explicitly and propose an alternative — don't silently
+> comply with something you think is wrong, and don't silently route around it
+> either.
 
-## What this project is
+Project **MeepleMind**, Python package **`meeple`**, CLI **`meeple`**. See
+`PLAN.md` for what the project is, its goals, and the roadmap — this file is
+process only, so that isn't repeated here.
 
-A **game-agnostic board-game AI platform**. The same engine interface, AI
-algorithms, evaluation harness, and web backend are reused across many games.
-**Kahuna is game #1.** Planned next: **Quarto, Splendor, Patchwork**. The whole
-point is that adding a game requires *no changes* to the AI / web / eval core.
+## Progress ledger — nothing important lives only in a chat
 
-Goals (priority order): (1) fun opponent, (2) a coach that teaches strategy,
-(3) from-scratch ML learning (own interface/engine/CFR), (4) host it from this
-machine behind Cloudflare, (5) reuse the backend for other games.
+This project spans many sessions and models. A session can end at any point,
+so progress must be durable and resumable from the repo alone:
 
-**Identity:** project **MeepleMind**; Python package **`meeple`** — everything
-(`framework/`, `ai/`, `eval/`, `web/`, `games/`) lives under `meeple/`, e.g.
-`from meeple.framework import Game`. CLI **`meeple`** (`meeple play kahuna`,
-`meeple coach kahuna`, `meeple serve`). Below, a bare `framework/` etc. refers to
-that `meeple/` sub-package.
+- **`PLAN.md`** is the strategic doc (goals, architecture, roadmap). It
+  changes rarely.
+- **Each phase's granular progress** — checklist, decisions, open blockers —
+  is tracked in a GitHub issue labeled `phase`, linked from `PLAN.md`'s phase
+  table. Update the issue (check off items, leave a comment on any nontrivial
+  decision) as you go, so a fresh session can resume from `PLAN.md` + that
+  issue alone, without reading this conversation.
+- **A game's rules and their verification status** live in
+  `games/<g>/RULES.md` — already durable via git.
+- **Tech debt** is tracked as GitHub issues labeled `tech-debt`, not a
+  markdown backlog.
+- This repo is public — never put secrets or anything you wouldn't want
+  public into an issue, commit message, or code comment.
 
 ## Guiding principles
 
-- **P1 — The seam is sacred.** AI / eval / web import *only* `framework/`. Game
-  code lives under `games/<g>/` and is reached only through the interface.
+- **P1 — Always reach a game through the seam.** `ai`/`eval`/`web` import
+  *only* `framework/`; game code lives under `games/<g>/` and is reached only
+  through the interface. What's non-negotiable is *having and using* this
+  boundary — the exact shape of the `Game`/`State` interface is our current
+  best guess, not sacred, and should improve as more games reveal what it's
+  missing. If a game keeps forcing awkward workarounds, that's a signal to
+  deliberately revise the interface (propose the change and why — see G8) —
+  not to quietly route around it.
 - **P2 — Rules before code.** Never implement a game from memory. The verified
   `games/<g>/RULES.md` must exist and be signed off first (see Gate G1).
 - **P3 — Test before moving on.** Every engine ships with passing tests.
@@ -41,7 +60,7 @@ that `meeple/` sub-package.
   registered, a rule is real — by running a command or citing a source.
 - **P7 — One phase at a time.** Build the smallest shippable increment. Do not
   start a later phase before the current one is "done" (see Definition of Done
-  in `PLAN.md`).
+  in that phase's GitHub issue).
 - **P8 — Server is authoritative.** The web backend re-validates every move.
 - **P9 — Reversibility.** `git commit` at every green checkpoint so work can be
   undone.
@@ -83,12 +102,14 @@ that `meeple/` sub-package.
   until they pass with **no new ignores/suppressions**. These exist because you
   can't see the whole repo — let the tools see it for you.
 
-## Code hygiene (keep the codebase small)
+## Engineering guardrails (keep the codebase small and honest)
 
-> AI agents tend to *add* code and rarely delete or consolidate, because each
-> session sees only a slice of the repo and additive changes feel safer. Counter
-> it with the rules below — and lean on **G10**, which mechanically enforces what
-> you can't eyeball across the codebase.
+> AI agents tend to *add* code and rarely delete, consolidate, or reorganize,
+> because each session sees only a slice of the repo and additive changes feel
+> safer. Counter it with the rules below — and lean on **G10**, which
+> mechanically enforces what you can't eyeball across the codebase.
+
+### Code hygiene
 
 - **H1 — Survey before adding.** Before writing new logic, grep for code that
   already does it; extend/refactor that rather than duplicating. Reuse > new.
@@ -98,14 +119,43 @@ that `meeple/` sub-package.
   speculative abstractions (YAGNI). Delete it — git keeps the history.
 - **H4 — Refactor ≠ feature.** Two commits: a behavior-preserving refactor (tests
   green before *and* after), then the feature. Never mix; keep diffs reviewable.
-- **H5 — Log debt, don't detour.** Spot a bigger or out-of-scope refactor? Append
-  it to `docs/TECH_DEBT.md` (don't silently leave it; don't balloon scope). Drain
-  that list in dedicated refactor passes — before a release, or when a file
-  crosses a size/complexity budget (e.g. > ~400 lines).
+- **H5 — Log debt, don't detour.** Spot a bigger or out-of-scope refactor? Open
+  a GitHub issue labeled `tech-debt` (don't silently leave it; don't balloon
+  scope). Drain that backlog in dedicated refactor passes — before a release,
+  or when a file crosses a size/complexity budget (e.g. > ~400 lines).
+
+### Test hygiene
+
+- **T1 — A test must be able to fail.** Before trusting a test, imagine
+  reverting the change it's meant to guard — would it actually go red? Don't
+  assert on tautologies (a mock returning what you told it to return, a
+  constant compared to itself, an untyped `assert result is not None`).
+- **T2 — Cover reachable behavior, not a percentage.** Coverage is a floor,
+  not the goal — padding it with trivial tests of getters or constants
+  doesn't pin down behavior that matters. Every branch a caller can actually
+  reach should have a test; branches that can't be reached (defensive code for
+  states that can't happen) should usually be deleted (H3), not tested around.
+- **T3 — No redundant tests.** If two tests would fail on the exact same bug,
+  keep one. Parametrize genuinely distinct cases instead of copy-pasting
+  near-identical test functions.
+
+### File & module hygiene
+
+- **F1 — One concern per file.** Don't bundle unrelated classes/functions into
+  one file for convenience; a file's contents should share a single reason to
+  change.
+- **F2 — Size is a smell, not a limit.** The ~400-line budget in H5 is a
+  prompt to split a file, not a rule to route around with tricks.
+- **F3 — Reorganize freely.** Moving or renaming files/folders for a clearer
+  structure is encouraged, not overhead avoided — do it as its own refactor
+  commit (H4), updating imports and tests in that same commit.
 
 ## STOP and ask the human when:
 
 - a rule is ambiguous or you can't verify it from a source;
+- a rule (in this file or elsewhere) seems wrong for the situation you're in —
+  say so and propose an alternative instead of silently overriding or
+  silently complying;
 - adding a game would require changing the `Game`/`State` interface;
 - a security / deploy / networking step (exposing the server, DNS, tunnels,
   secrets, Cloudflare config);
@@ -142,11 +192,14 @@ Per-game properties (drives the choice — confirm each in that game's RULES.md)
 
 ## Doc map
 
-- **CLAUDE.md** (this file) — *how* to work: principles, gates, recipe.
-- **PLAN.md** — *what* to build and in what order, + Definition of Done.
+- **CLAUDE.md** (this file) — *how* to work: principles, gates, engineering
+  guardrails, recipe.
+- **PLAN.md** — *what* to build, why, and the phase table (each phase links to
+  a GitHub issue for granular tracking).
 - **meeple/games/<g>/RULES.md** — the **authoritative** rules for a game (verified).
 - **docs/RULES_TEMPLATE.md** — template every new game's RULES.md is copied from.
-- **docs/TECH_DEBT.md** — refactor/debt backlog (externalized cross-session memory; H5).
+- **GitHub issues** — the durable progress ledger: `phase` label for
+  per-phase checklists/decisions, `tech-debt` label for the refactor backlog.
 
 If these documents ever conflict, the precedence is: a game's RULES.md (for that
 game's rules) > CLAUDE.md (for process) > PLAN.md (for scope/ordering).
