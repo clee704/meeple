@@ -1,4 +1,4 @@
-# MeepleMind — Implementation Plan
+# MeepleMind — Strategic Plan
 
 > A game-agnostic platform: one engine interface, one set of AI algorithms, one
 > eval harness, one web backend — reused across many games. **Kahuna is game #1**
@@ -6,8 +6,14 @@
 > and a from-scratch CFR stack for ML learning. Hostable from this machine behind
 > Cloudflare.
 >
-> **Before coding, read `CLAUDE.md`** (operating rules + hard gates). For a
-> game's rules, `meeple/games/<g>/RULES.md` is authoritative.
+> **Before coding, read `CLAUDE.md`** (operating rules + hard gates — this
+> doc is the *what*, that one is the *how*). For a game's rules,
+> `meeple/games/<g>/RULES.md` is authoritative.
+>
+> This is the durable strategic reference and changes rarely. Granular,
+> per-phase progress (checklists, decisions, blockers) lives in each phase's
+> GitHub issue (labeled `phase`), not here — a session should be able to
+> resume from this file + the open issues alone, without any chat history.
 >
 > Project **MeepleMind**; Python package **`meeple`** (all sub-packages live under
 > `meeple/`); CLI **`meeple`** (`meeple play kahuna`, `meeple coach`, `meeple serve`).
@@ -27,12 +33,6 @@
    must work for **Quarto, Splendor, Patchwork** with **no core changes** —
    adding a game = rules contract + engine + adapter + renderer (see the
    per-game recipe in `CLAUDE.md`).
-
-### Continuing with a smaller model
-This plan + `CLAUDE.md` are written so a cheaper model can continue safely. Each
-session: read `CLAUDE.md`, then this plan, then (if working a game) that game's
-`RULES.md`. Obey the **hard gates** in `CLAUDE.md` literally; escalate instead of
-guessing. Work one phase at a time and stop at its Definition of Done.
 
 ### Scoping goal #3 (so it doesn't become infinite)
 "From scratch" = your interface + engines + tabular CFR + Deep CFR + an
@@ -55,7 +55,7 @@ breadth. OpenSpiel stays the oracle you cross-check CFR against on Kuhn/Leduc.
                         ▲
         ┌───────────────┼───────────────┬──────────────┐
    games/kahuna     games/quarto     games/kuhn     OpenSpielAdapter
-   (game #1)        (Phase 10)    (seam smoke-test)   (oracle only)
+   (game #1)      (reuse proof)   (seam smoke-test)   (oracle only)
 ```
 
 - **Solvers/search/web import only `framework/`.** They never import `games/`.
@@ -67,6 +67,9 @@ breadth. OpenSpiel stays the oracle you cross-check CFR against on Kuhn/Leduc.
   imperfect-info; MCTS for perfect-info; ISMCTS for imperfect-info; heuristic
   always). **CFR does not generalize to Quarto/Patchwork/Splendor — MCTS/ISMCTS
   does.**
+- The interface's current shape is a best guess, not final — see CLAUDE.md's
+  P1: if a game keeps forcing awkward workarounds, that's signal to
+  deliberately revise `Game`/`State`, not route around it.
 
 **Platform components (build once, reused):** `framework/`, `ai/`, `eval/`,
 `web/`, `coach`. **Per-game components (repeat via the recipe):**
@@ -76,10 +79,13 @@ breadth. OpenSpiel stays the oracle you cross-check CFR against on Kuhn/Leduc.
 
 ## Stack
 
-- **Python**: pinned project venv. Box is 3.14.6; current OpenSpiel ships
-  3.11–3.14 Linux wheels — **verify day one** (Phase 0). Keep a 3.12 venv as
-  fallback (OpenSpiel is optional, so a missing wheel never blocks the platform).
-- `torch` (Deep CFR), `numpy` (tabular), `rich` (terminal UI),
+- **Python 3.12**, pinned. A plain `torch` + CUDA smoke test also passes on
+  3.14 on this box, but 3.12 is the safer choice while the wider ML tooling
+  ecosystem catches up to 3.14 — this box hit a hard error serving a model via
+  vLLM on 3.14 recently, and this project will eventually lean on that same
+  ecosystem for Deep CFR training. Re-evaluate 3.14 later if the ecosystem
+  stabilizes.
+- `torch` (Deep CFR), `numpy` (tabular), `rich` (terminal UI, once built),
   `open-spiel` (**oracle only**), `fastapi`+`uvicorn` (web),
   `slowapi`/Redis (optional: rate-limit / shared state).
 - Hygiene: `pyproject.toml` + lock, global seed control, a `Config` dataclass,
@@ -122,115 +128,39 @@ class Game(ABC):
 ```
 
 This interface must be general enough for: 2p vs n-player (`returns` is a list),
-perfect vs imperfect info, chance vs no chance. **If a new game needs a change
-here, STOP and ask (CLAUDE.md G8).**
+perfect vs imperfect info, chance vs no chance. If a new game needs a change
+here, that's a deliberate interface revision (propose it, don't route around
+it — CLAUDE.md G8), not a quick patch.
 
 ---
 
 ## Phases
 
-> Each phase lists a **Done when** (Definition of Done). Don't start the next
-> phase until the current one's Done-when holds and you've committed (G9).
-> Tag: **[platform]** = build once & reuse; **[per-game]** = repeat via recipe.
+Each phase's Definition of Done, checklist, and running log of decisions lives
+in its GitHub issue (label `phase`) — linked below once filed. Don't start a
+phase before the previous one's issue is closed. **[platform]** = build once
+& reuse; **[per-game]** = repeat via the onboarding recipe in `CLAUDE.md`.
 
-### Phase 0 — Setup **[platform]**
-- `git init` (so every checkpoint is revertible — G9); pinned venv;
-  `pip install torch open-spiel rich`.
-- **Verify the stack:** `python -c "import pyspiel; print(len(pyspiel.registered_games()))"`
-  and a torch tensor op both succeed (fall back to a 3.12 venv if needed).
-- `pyproject.toml`, `config.py` (seeds), package skeleton (see layout).
-- **Dev hygiene tooling (CLAUDE.md G10):** `ruff`, `vulture`, `deptry`,
-  `import-linter` (encode the seam G2 as a contract: `ai`/`eval`/`web` must not
-  import `games`), `pytest`+coverage — all wired into `pre-commit` and CI. Seed
-  `docs/TECH_DEBT.md`.
-- **Done when:** clean checkout imports; smoke checks + `pre-commit run -a` pass;
-  first commit made.
+| # | Phase | Tag | Scope | Issue |
+|---|-------|-----|-------|-------|
+| 0 | Setup | platform | venv, `pyproject.toml`, dev tooling (ruff/vulture/deptry/import-linter/pytest), pre-commit + CI | _TBD_ |
+| 1 | Framework seam | platform | `Game`/`State`/`GameSpec`/registry, native Kuhn poker, `OpenSpielAdapter` (oracle), `random_agent` | _TBD_ |
+| 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | _TBD_ |
+| 3 | Terminal UI | shell + per-game renderer | game-agnostic CLI shell + Kahuna ASCII renderer; human-vs-human | _TBD_ |
+| 4 | AI: heuristic + MCTS + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py`, `ai/mcts.py`, `ai/ismcts.py` | _TBD_ |
+| 5 | Eval harness | platform | `eval/tournament.py`, `eval/exploitability.py` validated vs OpenSpiel on Kuhn | _TBD_ |
+| 6 | Tabular CFR | platform | `ai/cfr/tabular.py`, validated on native Kuhn | _TBD_ |
+| 7 | Coach / explain mode | platform | rank legal moves by win-prob, narrate control changes, `--hint` | _TBD_ |
+| 8 | Deep CFR | platform | `ai/cfr/deep_cfr.py`, advantage/strategy nets, external-sampling MCCFR | _TBD_ |
+| 9 | Web backend | platform | FastAPI, queue, store, Turnstile, Cloudflare Tunnel + systemd | _TBD_ |
+| 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes | _TBD_ |
+| 11 | Polish / deploy | platform | checkpoints, difficulty levels, `--watch`, monitoring | _TBD_ |
 
-### Phase 1 — Framework seam **[platform]**
-- `framework/game.py` (interface), `framework/spec.py` (`GameSpec`),
-  `framework/registry.py` (id → `Game` factory + spec).
-- **Native Kuhn poker** (`meeple/games/kuhn/`) to exercise the seam with zero OpenSpiel
-  dependency. (Kuhn rules are standard — still drop a short `RULES.md`.)
-- `OpenSpielAdapter` (oracle only) + `random_agent`.
-- **Done when:** random agent plays full Kuhn games through the interface; Kuhn
-  via your adapter and via OpenSpiel agree on `returns` over many seeded games.
-
-### Phase 2 — Kahuna engine **[per-game]**  *(GATED by `meeple/games/kahuna/RULES.md`, G1)*
-- **Resolve the 3 MUST-VERIFY items in `meeple/games/kahuna/RULES.md` first** (board
-  graph + bridge count, removal cost, draw mechanics). No engine code until done.
-- Encode the board (`graph.py`): adjacency + indexed bridge positions (this sets
-  `num_distinct_actions`).
-- Engine: atomic actions (`place`/`remove`/`end_turn`); **`recompute_control`
-  fixpoint** + gain-control auto-removal + cascade; draw chance node; scoring at
-  the 3 triggers (reshuffle, keep hands); supplies; `returns`.
-- **Done when (G3):** tests pass for legal/illegal actions, strict-majority
-  thresholds, **the cascade**, all 3 scorings + tiebreak, determinism, and a full
-  playthrough; the worked-example position in RULES.md is a regression test.
-
-### Phase 3 — Terminal UI + human-vs-human **[platform shell + per-game renderer]**
-- `cli.py` game-agnostic shell; `meeple/games/kahuna/renderer.py` ASCII board (islands,
-  owned/empty bridges, tokens), hand, face-up cards, scores.
-- **Done when:** two humans can play a full Kahuna game in the terminal.
-
-### Phase 4 — AI: heuristic + MCTS + ISMCTS **[platform]**  *(serves goals #1, #2, #5)*
-- `ai/base.py` (Agent interface), `ai/heuristic.py` (per-game scoring hook),
-  `ai/mcts.py` (UCT — perfect-info games), `ai/ismcts.py` (determinized — Kahuna,
-  Splendor). Difficulty = simulation budget.
-- **Done when (G5):** ISMCTS beats `random` decisively and beats the heuristic on
-  Kahuna in the eval harness; agents select via the solver matrix from `GameSpec`.
-
-### Phase 5 — Eval harness **[platform]**
-- `eval/tournament.py` (head-to-head win-rates + CIs between any agents),
-  `eval/exploitability.py` (your own NashConv) validated vs OpenSpiel on Kuhn.
-- **Done when:** can run an N-game match between any two agents and report
-  win-rate + CI; exploitability matches OpenSpiel on Kuhn.
-
-### Phase 6 — Tabular CFR **[platform]**
-- `ai/cfr/tabular.py`; validate on native Kuhn.
-- **Done when:** exploitability on Kuhn → ~0 and matches OpenSpiel.
-
-### Phase 7 — Coach / explain mode **[platform]**  *(serves goal #2)*
-- `coach.py`: rank legal moves by estimated win-prob/value (ISMCTS stats),
-  show the best move + swing, **narrate control changes**; `--hint` in play +
-  post-game review.
-- **Done when:** for a given Kahuna position, coach lists moves with win-prob and
-  a human-readable reason for the top move.
-
-### Phase 8 — Deep CFR **[platform]**  *(serves goal #3)*
-- `ai/cfr/deep_cfr.py`, `ai/cfr/networks.py`, `train_deep_cfr.py`. Concrete
-  info-state tensor (see RULES.md). **Advantage net per player + one strategy
-  net; reservoir-sampled memories; retrain advantage net from scratch each CFR
-  iteration; train strategy net once at the end** (do not "clear a replay
-  buffer"). External-sampling MCCFR; consider Linear/Discounted CFR.
-- **Done when:** trained strategy net beats the heuristic and is competitive with
-  ISMCTS in the eval harness; training is reproducible from a seed + config.
-
-### Phase 9 — Web backend **[platform]**  *(serves goal #4)*
-- Design fact: a trained-net move = one forward pass (cheap); an ISMCTS move runs
-  many sims (expensive). **Size the queue for the ISMCTS worst case.**
-- FastAPI; REST (create / get-state / move→AI-reply / resign); **server
-  re-validates every action** (G7). `web/registry.py` maps game-id → factory +
-  renderer (game-agnostic). `web/store.py` (in-memory + TTL; Redis optional).
-  `web/queue.py` (`asyncio.Semaphore(N)` + `asyncio.Queue`, returns **queue
-  position**; per-move compute budget). `web/turnstile.py` (verify server-side).
-- Edge: Cloudflare proxied DNS (WAF + Rate-Limiting Rules + Bot Fight Mode) +
-  **Cloudflare Tunnel (`cloudflared`)** to expose this box with no port-forward.
-  Run as **systemd** service; health endpoint; structured logs; global
-  max-active-games cap overflowing into the queue.
-- **Done when (G7):** a stranger can play Kahuna vs the AI over the internet;
-  illegal moves are rejected server-side; load beyond N queues gracefully;
-  Turnstile + rate limits active.
-
-### Phase 10 — Second game (reuse proof) **[per-game]**  *(serves goal #5)*
-- Add **Quarto** or **Patchwork** via the per-game recipe (RULES.md → engine →
-  adapter → renderer → register). Perfect-info → reuse **MCTS**.
-- **Done when (G8):** the new game is playable in terminal and web using the
-  **existing** AI/eval/web core with **zero changes** to `framework/ai/web`; all
-  prior games' tests still pass.
-
-### Phase 11 — Polish / deploy **[platform]**
-- Save/load checkpoints; difficulty levels; `--watch` AI-vs-AI; show move-prob
-  distribution; deploy + monitor.
+Status right now: **Phase 0 and 1 done** (tooling committed; framework seam,
+native Kuhn, `OpenSpielAdapter`, `random_agent` implemented and tested).
+**Phase 2 is gated** — see `meeple/games/kahuna/RULES.md`'s open
+`MUST-VERIFY` items (board graph/bridge count, removal cost, draw mechanics)
+before any Kahuna engine code.
 
 ---
 
@@ -241,8 +171,8 @@ meeple/                         # the importable package (from meeple.framework 
   framework/  game.py  spec.py  registry.py
   games/
     kahuna/   RULES.md  graph.py  engine.py  adapter.py  renderer.py  tests/
-    kuhn/     RULES.md  game.py   tests/
-    quarto/   ...                              # Phase 10
+    kuhn/     RULES.md  engine.py  tests/
+    quarto/   ...                              # second-game reuse proof
   ai/         base.py  heuristic.py  mcts.py  ismcts.py
               cfr/tabular.py  cfr/deep_cfr.py  cfr/networks.py
   eval/       tournament.py  exploitability.py
@@ -255,24 +185,3 @@ CLAUDE.md  PLAN.md  pyproject.toml
 
 Rule of thumb: if a file names a game, it lives under `meeple/games/<g>/`. If it's in
 `framework/ai/eval/web`, it must not name any game (CLAUDE.md G2/G5).
-
----
-
-## Open questions
-
-Kahuna's are tracked in **`meeple/games/kahuna/RULES.md`** (3 BLOCKING MUST-VERIFY items:
-board graph/bridge count, removal cost, draw mechanics). Resolved already: deck =
-24 (2/island); scoring = pile+face-up exhaustion, reshuffle, keep hands, 1/2/diff;
-OpenSpiel has no Kahuna (oracle only).
-
----
-
-## Starting point for next session
-
-0. **Read `CLAUDE.md`**, then this plan, then `meeple/games/kahuna/RULES.md`.
-1. **Phase 0:** `git init`; venv; verify `pyspiel` + torch import; first commit.
-2. **Phase 1:** `framework/` seam + native Kuhn + random agent (no OpenSpiel
-   needed to start).
-3. **Phase 2 (gated):** resolve the 3 MUST-VERIFY rules items, then board graph →
-   Kahuna engine + cascade tests.
-4. Then **Phase 4 (ISMCTS)** for a fun opponent *before* Deep CFR.
