@@ -214,18 +214,27 @@ num_players           = 2
 perfect_information   = False
 has_chance            = True
 zero_sum              = True
-num_distinct_actions  = 2 * 27 + 5 = 59   # place + remove per line (P=27),
-                                          # + draw-blind + 3 face-up picks + skip
+num_distinct_actions  = 5 * 27 + 5 = 140   # see Action encoding below (P=27)
 ```
 
 ## Action encoding
 
+Which specific card(s) a `place`/`remove` spends is a real choice, not an
+implementation detail — 2 cards of the same island vs. 1 of each leaves a
+different hand and a different discard pile, which matters strategically.
+So each is split by exactly which card(s) it spends, using `a`/`b` for a
+line's two endpoint islands (`a` alphabetically first, per the `bridge_pos`
+table below):
+
 `P = 27`. Stable integer scheme:
-- `0 .. 26` → `place(bridge_pos = i)`
-- `27 .. 53` → `remove(bridge_pos = i - 27)`
-- `54` → end turn, draw blind from the face-down pile
-- `55 .. 57` → end turn, take face-up slot `j` (`j` in 0..2)
-- `58` → end turn, skip the draw
+- `0 .. 26` → `place(bridge_pos = i, using card a)`
+- `27 .. 53` → `place(bridge_pos = i - 27, using card b)`
+- `54 .. 80` → `remove(bridge_pos = i - 54, using 2 cards of a)`
+- `81 .. 107` → `remove(bridge_pos = i - 81, using 2 cards of b)`
+- `108 .. 134` → `remove(bridge_pos = i - 108, using 1 card of a + 1 of b)`
+- `135` → end turn, draw blind from the face-down pile
+- `136 .. 138` → end turn, take face-up slot `j` (`j` in 0..2)
+- `139` → end turn, skip the draw
 
 (Exactly how face-up slots are indexed as they get refilled is an
 implementation detail to pin down when the engine is built, not a rules
@@ -247,11 +256,13 @@ island names:
 | 8 | COCO-GOLA | 17 | FAAA-JOJO | 26 | KAHU-LALE |
 
 `legal_actions()` filters these down by: the line is free and you hold a
-card naming one of its endpoint islands (`place`); your opponent owns that
-bridge and you hold either 2 cards naming one of its endpoint islands, or 1
-card naming each endpoint island (`remove`); draw-blind and each currently-
-filled face-up slot are always legal; skip is legal only if the opponent's
-immediately preceding turn wasn't itself a skip.
+card naming the specific endpoint island that variant spends (`place`);
+your opponent owns that bridge and you hold the specific card(s) that
+variant spends — 2 of one endpoint, or 1 of each (`remove`); draw-blind and
+each currently-filled face-up slot are always legal; skip is legal only if
+the opponent's immediately preceding turn wasn't itself a skip (unless
+there's genuinely nothing left to draw, in which case skip is always
+legal).
 
 ## Information-state tensor (for Deep CFR)
 
@@ -276,10 +287,11 @@ Board state before the move:
 - **HUNA**'s 5 lines: `ALOA-HUNA`(2) and `ELAI-HUNA`(13) and `HUNA-IFFI`(20)
   are player 1's; `DUDA-HUNA`(11) and `HUNA-LALE`(21) are free. Player 1
   controls HUNA with exactly 3 of 5 (majority).
-- Player 0 holds a card naming ELAI (or IFFI) in hand.
+- Player 0 holds an ELAI card in hand.
 
-At this position, `place(bridge_pos=14)` (`ELAI-IFFI`) is legal for player 0
-— the line is free and they hold a card naming one of its endpoints.
+At this position, `place(bridge_pos=14, using card ELAI)` is legal for
+player 0 — the `ELAI-IFFI` line is free and they hold a card naming its
+`a` endpoint (ELAI).
 
 Playing it:
 1. Player 0's count on ELAI goes from 3 to 4 — a new strict majority. Player

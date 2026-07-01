@@ -1,0 +1,473 @@
+"""Native Kahuna engine. Rules: `meeple/games/kahuna/RULES.md`.
+
+RULES.md's action encoding lists one `place`/`remove` action per bridge
+line, but which specific card(s) a hand spends to pay for it is a real
+strategic choice (a different hand and discard-pile composition come out
+of it) — not an interchangeable implementation detail. So each `place` and
+`remove` action is split by exactly which card(s) it spends: `place` by
+which of the line's two endpoint islands the discarded card names;
+`remove` by whether it spends 2 cards of one endpoint, 2 of the other, or
+1 of each. This expands the action space beyond what RULES.md's Action
+encoding section shows; see that section (updated to match) for the
+current numbering.
+
+RULES.md doesn't pin down every other engine-level detail. Assumptions
+made here, each also filed as a tech-debt item for a rulebook re-check:
+
+A1. Player 0 moves first (not stated in RULES.md; arbitrary/symmetric).
+A2. Hand limit (5) is tracked but not enforced as a hard block on drawing —
+    RULES.md doesn't say whether it forces a discard or blocks the draw,
+    and blocking risks a deadlock (see A5).
+A3. Token supply (10 per player) isn't separately capped; control is
+    derived from bridge majority, and bridge supply (25, which *is*
+    enforced) makes exceeding 10 controlled islands extremely unlikely.
+A4. "Premature end" is checked after every bridge removal, but only once
+    scoring_count >= 1 (i.e. during round 2 or round 3, not round 1).
+A5. Skip is allowed even after an immediately-preceding skip if there is
+    truly nothing to draw (empty pile and no face-up cards) — otherwise the
+    final "one more turn each" phase (where the deck is permanently empty)
+    could deadlock under the literal no-double-skip rule.
+"""
+
+import torch
+
+from meeple.framework.game import CHANCE, Action, Game, State
+from meeple.framework.spec import GameSpec
+from meeple.games.kahuna.graph import BRIDGES, ISLAND_BRIDGES, ISLANDS, MAJORITY, NUM_BRIDGES
+
+NUM_ISLANDS = len(ISLANDS)
+BRIDGE_SUPPLY = 25
+NUM_FACEUP_SLOTS = 3
+
+# place/remove are split by exactly which card(s) they spend — see module
+# docstring. `a`/`b` below always mean BRIDGES[pos][0]/BRIDGES[pos][1].
+PLACE_A_BASE = 0
+PLACE_B_BASE = NUM_BRIDGES
+REMOVE_AA_BASE = 2 * NUM_BRIDGES
+REMOVE_BB_BASE = 3 * NUM_BRIDGES
+REMOVE_AB_BASE = 4 * NUM_BRIDGES
+DRAW_BLIND = 5 * NUM_BRIDGES
+FACEUP_BASE = DRAW_BLIND + 1
+SKIP = FACEUP_BASE + NUM_FACEUP_SLOTS
+NUM_ACTIONS = SKIP + 1
+
+DECK: tuple[str, ...] = tuple(sorted(ISLANDS * 2))  # 24 cards, 2 per island
+
+_ACTION_NAMES = (
+    tuple(f"place({a}-{b} using {a})" for a, b in BRIDGES)
+    + tuple(f"place({a}-{b} using {b})" for a, b in BRIDGES)
+    + tuple(f"remove({a}-{b} using 2x{a})" for a, b in BRIDGES)
+    + tuple(f"remove({a}-{b} using 2x{b})" for a, b in BRIDGES)
+    + tuple(f"remove({a}-{b} using {a}+{b})" for a, b in BRIDGES)
+    + ("draw_blind",)
+    + tuple(f"take_faceup_{j}" for j in range(NUM_FACEUP_SLOTS))
+    + ("skip",)
+)
+
+
+def _kahuna_spec() -> GameSpec:
+    return GameSpec(
+        num_players=2,
+        perfect_information=False,
+        has_chance=True,
+        zero_sum=True,
+        num_distinct_actions=NUM_ACTIONS,
+        action_names=_ACTION_NAMES,
+    )
+
+
+def _remove_first(hand: tuple[str, ...], card: str) -> tuple[str, ...]:
+    items = list(hand)
+    items.remove(card)
+    return tuple(items)
+
+
+class KahunaState(State):
+    def __init__(
+        self,
+        bridges: tuple[int | None, ...],
+        hands: tuple[tuple[str, ...], tuple[str, ...]],
+        face_up: tuple[str | None, ...],
+        pile: tuple[str, ...],
+        discard: tuple[str, ...],
+        current_player: int,
+        pending: tuple[str, ...],
+        pending_reason: str,
+        scores: tuple[float, float],
+        scoring_count: int,
+        previous_turn_was_skip: bool,
+        final_turns_remaining: int | None,
+        premature_winner: int | None,
+    ):
+        self._bridges = bridges
+        self._hands = hands
+        self._face_up = face_up
+        self._pile = pile
+        self._discard = discard
+        self._current_player = current_player
+        self._pending = pending
+        self._pending_reason = pending_reason
+        self._scores = scores
+        self._scoring_count = scoring_count
+        self._previous_turn_was_skip = previous_turn_was_skip
+        self._final_turns_remaining = final_turns_remaining
+        self._premature_winner = premature_winner
+
+    # --- derived board queries -------------------------------------------------
+
+    def _bridge_count(self, player: int, island: str) -> int:
+        return sum(1 for pos in ISLAND_BRIDGES[island] if self._bridges[pos] == player)
+
+    def _controller(self, island: str) -> int | None:
+        for player in (0, 1):
+            if self._bridge_count(player, island) >= MAJORITY[island]:
+                return player
+        return None
+
+    def _controlled_islands(self, player: int) -> int:
+        return sum(1 for island in ISLANDS if self._controller(island) == player)
+
+    def _total_bridges(self, player: int) -> int:
+        return sum(1 for owner in self._bridges if owner == player)
+
+    def _pile_and_faceup_empty(self) -> bool:
+        return len(self._pile) == 0 and all(c is None for c in self._face_up)
+
+    # --- State interface ---------------------------------------------------
+
+    def legal_actions(self) -> list[Action]:
+        if self.is_terminal():
+            return []
+        if self._pending:
+            raise RuntimeError("call apply_action with a chance outcome first")
+
+        player = self._current_player
+        opponent = 1 - player
+        hand = self._hands[player]
+        actions: list[Action] = []
+
+        if self._total_bridges(player) < BRIDGE_SUPPLY:
+            for pos, (a, b) in enumerate(BRIDGES):
+                if self._bridges[pos] is not None:
+                    continue
+                if a in hand:
+                    actions.append(PLACE_A_BASE + pos)
+                if b in hand:
+                    actions.append(PLACE_B_BASE + pos)
+
+        for pos, (a, b) in enumerate(BRIDGES):
+            if self._bridges[pos] != opponent:
+                continue
+            if hand.count(a) >= 2:
+                actions.append(REMOVE_AA_BASE + pos)
+            if hand.count(b) >= 2:
+                actions.append(REMOVE_BB_BASE + pos)
+            if a in hand and b in hand:
+                actions.append(REMOVE_AB_BASE + pos)
+
+        if self._pile:
+            actions.append(DRAW_BLIND)
+        for j, card in enumerate(self._face_up):
+            if card is not None:
+                actions.append(FACEUP_BASE + j)
+
+        nothing_to_draw = not self._pile and all(c is None for c in self._face_up)
+        skip_allowed = (
+            not self._previous_turn_was_skip
+            or self._final_turns_remaining is not None
+            or nothing_to_draw
+        )
+        if skip_allowed:
+            actions.append(SKIP)
+
+        return actions
+
+    def apply_action(self, action: Action) -> "KahunaState":
+        if self._pending:
+            return self._apply_chance(action)
+
+        legal = self.legal_actions()
+        if action not in legal:
+            raise ValueError(f"illegal action {action!r}; legal: {legal}")
+
+        if PLACE_A_BASE <= action < PLACE_B_BASE:
+            return self._apply_place(action - PLACE_A_BASE, endpoint=0)
+        if PLACE_B_BASE <= action < REMOVE_AA_BASE:
+            return self._apply_place(action - PLACE_B_BASE, endpoint=1)
+        if REMOVE_AA_BASE <= action < REMOVE_BB_BASE:
+            return self._apply_remove(action - REMOVE_AA_BASE, cards="aa")
+        if REMOVE_BB_BASE <= action < REMOVE_AB_BASE:
+            return self._apply_remove(action - REMOVE_BB_BASE, cards="bb")
+        if REMOVE_AB_BASE <= action < DRAW_BLIND:
+            return self._apply_remove(action - REMOVE_AB_BASE, cards="ab")
+        if action == DRAW_BLIND:
+            return self._replace(pending=(f"hand{self._current_player}",), pending_reason="turn")
+        if FACEUP_BASE <= action < SKIP:
+            return self._apply_take_faceup(action - FACEUP_BASE)
+        return self._apply_skip()
+
+    def is_terminal(self) -> bool:
+        if self._premature_winner is not None:
+            return True
+        return self._scoring_count == 3 and self._final_turns_remaining == 0
+
+    def returns(self) -> list[float]:
+        if not self.is_terminal():
+            raise RuntimeError("returns() called on a non-terminal state")
+        if self._premature_winner is not None:
+            return [1.0, -1.0] if self._premature_winner == 0 else [-1.0, 1.0]
+        return [self._scores[0] - self._scores[1], self._scores[1] - self._scores[0]]
+
+    def current_player(self) -> int:
+        if self._pending:
+            return CHANCE
+        if self.is_terminal():
+            raise RuntimeError("current_player() called on a terminal state")
+        return self._current_player
+
+    def chance_outcomes(self) -> list[tuple[Action, float]]:
+        if not self._pending:
+            return []
+        total = len(self._pile)
+        counts: dict[str, int] = {}
+        for card in self._pile:
+            counts[card] = counts.get(card, 0) + 1
+        return [(ISLANDS.index(island), count / total) for island, count in counts.items()]
+
+    def information_state_key(self, player: int) -> str:
+        return repr(
+            (
+                self._bridges,
+                self._face_up,
+                self._discard,
+                len(self._pile),
+                self._current_player,
+                self._pending_reason if self._pending else None,
+                self._scores,
+                self._scoring_count,
+                self._previous_turn_was_skip,
+                self._final_turns_remaining,
+                self._premature_winner,
+                tuple(sorted(self._hands[player])),
+            )
+        )
+
+    def information_state_tensor(self, player: int) -> torch.Tensor:
+        values: list[float] = []
+        for owner in self._bridges:
+            relative = 0 if owner is None else (1 if owner == player else 2)
+            values.extend(1.0 if relative == k else 0.0 for k in range(3))
+        for island in ISLANDS:
+            controller = self._controller(island)
+            relative = 0 if controller is None else (1 if controller == player else 2)
+            values.extend(1.0 if relative == k else 0.0 for k in range(3))
+        for island in ISLANDS:
+            values.append(float(self._hands[player].count(island)))
+        for island in ISLANDS:
+            values.append(float(sum(1 for c in self._face_up if c == island)))
+        for island in ISLANDS:
+            values.append(float(self._discard.count(island)))
+        values.append(float(len(self._pile)))
+        values.append(self._scores[player])
+        values.append(self._scores[1 - player])
+        values.append(float(self._scoring_count))
+        values.append(1.0 if self._previous_turn_was_skip else 0.0)
+        values.append(
+            float(self._final_turns_remaining) if self._final_turns_remaining is not None else -1.0
+        )
+        return torch.tensor(values, dtype=torch.float32)
+
+    # --- mutation helpers ----------------------------------------------------
+
+    def _replace(self, **overrides) -> "KahunaState":
+        fields = dict(
+            bridges=self._bridges,
+            hands=self._hands,
+            face_up=self._face_up,
+            pile=self._pile,
+            discard=self._discard,
+            current_player=self._current_player,
+            pending=self._pending,
+            pending_reason=self._pending_reason,
+            scores=self._scores,
+            scoring_count=self._scoring_count,
+            previous_turn_was_skip=self._previous_turn_was_skip,
+            final_turns_remaining=self._final_turns_remaining,
+            premature_winner=self._premature_winner,
+        )
+        fields.update(overrides)
+        return KahunaState(**fields)
+
+    def _apply_place(self, pos: int, endpoint: int) -> "KahunaState":
+        player = self._current_player
+        a, b = BRIDGES[pos]
+        card = a if endpoint == 0 else b
+        hands = list(self._hands)
+        hands[player] = _remove_first(hands[player], card)
+        bridges = list(self._bridges)
+        bridges[pos] = player
+        state = self._replace(
+            bridges=tuple(bridges),
+            hands=tuple(hands),
+            discard=tuple(sorted(self._discard + (card,))),
+        )
+        for island in (a, b):
+            state = state._resolve_new_control(island, player)
+        return state._check_premature_end()
+
+    def _apply_remove(self, pos: int, cards: str) -> "KahunaState":
+        player = self._current_player
+        a, b = BRIDGES[pos]
+        c1, c2 = {"aa": (a, a), "bb": (b, b), "ab": (a, b)}[cards]
+        hands = list(self._hands)
+        hand = _remove_first(hands[player], c1)
+        hand = _remove_first(hand, c2)
+        hands[player] = hand
+        bridges = list(self._bridges)
+        bridges[pos] = None
+        # Losing majority on `a`/`b` here is purely passive — _controller()
+        # derives it on demand from bridge counts, so nothing further to do.
+        state = self._replace(
+            bridges=tuple(bridges),
+            hands=tuple(hands),
+            discard=tuple(sorted(self._discard + (c1, c2))),
+        )
+        return state._check_premature_end()
+
+    def _resolve_new_control(self, island: str, player: int) -> "KahunaState":
+        if self._bridge_count(player, island) < MAJORITY[island]:
+            return self
+        opponent = 1 - player
+        state = self
+        for pos in ISLAND_BRIDGES[island]:
+            if state._bridges[pos] == opponent:
+                bridges = list(state._bridges)
+                bridges[pos] = None
+                state = state._replace(bridges=tuple(bridges))
+        return state
+
+    def _check_premature_end(self) -> "KahunaState":
+        if self._scoring_count < 1:
+            return self
+        for player in (0, 1):
+            if self._total_bridges(player) == 0:
+                return self._replace(premature_winner=1 - player)
+        return self
+
+    def _apply_take_faceup(self, slot: int) -> "KahunaState":
+        player = self._current_player
+        card = self._face_up[slot]
+        hands = list(self._hands)
+        hands[player] = self._hands[player] + (card,)
+        face_up = list(self._face_up)
+        face_up[slot] = None
+        state = self._replace(hands=tuple(hands), face_up=tuple(face_up))
+        if state._pile:
+            return state._replace(pending=(f"faceup{slot}",), pending_reason="turn")
+        return state._finish_turn()
+
+    def _apply_skip(self) -> "KahunaState":
+        return self._finish_turn(was_skip=True)
+
+    def _finish_turn(self, was_skip: bool = False) -> "KahunaState":
+        state = self._replace(previous_turn_was_skip=was_skip)
+        just_entered_final_phase = False
+        # Once the final-turns countdown has started, pile+face-up stay empty
+        # for its whole duration — don't re-trigger scoring on every turn.
+        if state._final_turns_remaining is None and state._pile_and_faceup_empty():
+            state = state._trigger_scoring()
+            just_entered_final_phase = state._final_turns_remaining is not None
+        # The turn that triggers the final phase doesn't itself count as one
+        # of the "one more turn each" — that countdown starts on the *next*
+        # turn (RULES.md: each player takes one more turn *after* this one).
+        if state._final_turns_remaining is not None and not just_entered_final_phase:
+            state = state._replace(final_turns_remaining=state._final_turns_remaining - 1)
+            if state._final_turns_remaining == 0:
+                return state._final_scoring()
+        return state._replace(current_player=1 - state._current_player)
+
+    def _trigger_scoring(self) -> "KahunaState":
+        scoring_count = self._scoring_count + 1
+        if scoring_count == 3:
+            return self._replace(scoring_count=scoring_count, final_turns_remaining=2)
+
+        p0, p1 = self._controlled_islands(0), self._controlled_islands(1)
+        points = 1.0 if scoring_count == 1 else 2.0
+        scores = list(self._scores)
+        if p0 > p1:
+            scores[0] += points
+        elif p1 > p0:
+            scores[1] += points
+
+        new_pile = tuple(sorted(self._discard))
+        num_to_deal = min(NUM_FACEUP_SLOTS, len(new_pile))
+        return self._replace(
+            scores=tuple(scores),
+            scoring_count=scoring_count,
+            pile=new_pile,
+            discard=(),
+            face_up=(None, None, None),
+            pending=tuple(f"faceup{j}" for j in range(num_to_deal)),
+            pending_reason="reshuffle",
+        )
+
+    def _final_scoring(self) -> "KahunaState":
+        p0, p1 = self._controlled_islands(0), self._controlled_islands(1)
+        scores = list(self._scores)
+        if p0 > p1:
+            scores[0] += p0 - p1
+        elif p1 > p0:
+            scores[1] += p1 - p0
+        return self._replace(scores=tuple(scores))
+
+    def _apply_chance(self, action: Action) -> "KahunaState":
+        island = ISLANDS[action]
+        destination, *rest = self._pending
+        pile = list(self._pile)
+        pile.remove(island)
+        state = self._replace(pile=tuple(pile), pending=tuple(rest))
+
+        if destination.startswith("hand"):
+            player = int(destination[len("hand") :])
+            hands = list(state._hands)
+            hands[player] = hands[player] + (island,)
+            state = state._replace(hands=tuple(hands))
+        else:
+            slot = int(destination[len("faceup") :])
+            face_up = list(state._face_up)
+            face_up[slot] = island
+            state = state._replace(face_up=tuple(face_up))
+
+        if state._pending:
+            return state
+
+        if state._pending_reason == "turn":
+            return state._finish_turn()
+        return state
+
+
+class KahunaGame(Game):
+    def new_initial_state(self) -> KahunaState:
+        deal_order = tuple(f"hand{p}" for p in (0, 0, 0, 1, 1, 1)) + (
+            "faceup0",
+            "faceup1",
+            "faceup2",
+        )
+        return KahunaState(
+            bridges=(None,) * NUM_BRIDGES,
+            hands=((), ()),
+            face_up=(None, None, None),
+            pile=DECK,
+            discard=(),
+            current_player=0,  # A1: player 0 moves first
+            pending=deal_order,
+            pending_reason="setup",
+            scores=(0.0, 0.0),
+            scoring_count=0,
+            previous_turn_was_skip=False,
+            final_turns_remaining=None,
+            premature_winner=None,
+        )
+
+    def spec(self) -> GameSpec:
+        return _kahuna_spec()
