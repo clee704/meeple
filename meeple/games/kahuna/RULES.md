@@ -181,20 +181,30 @@ tokens per player, in total. Running out limits what you can still play.
 
 ## Terminal conditions & scoring
 
-- A **scoring round** happens once the face-down pile is empty *and* the
-  last of the 3 face-up cards has been drawn.
-- After the 1st and 2nd scoring rounds: shuffle the discards into a new draw
-  pile, deal 3 new face-up cards, and keep playing — players keep their
-  current hands. The game ends after the 3rd scoring round.
-- Points:
-  - **1st scoring:** whoever controls more islands (by token count) gets +1.
-  - **2nd scoring:** whoever controls more islands gets +2.
-  - **3rd (final) scoring:** the leader's margin is the actual
-    island/token difference between the two players.
-  - **Tiebreak:** whoever has more bridges on the board; if still tied,
-    nobody wins.
+- A **scoring round** triggers once the face-down pile is empty *and* the
+  last of the 3 face-up cards has been drawn. This happens up to 3 times.
+- **1st and 2nd scoring (interim):** each player counts islands they hold
+  the token on. Whoever has more gets a point (+1 at the 1st scoring, +2 at
+  the 2nd); if tied, neither player scores. Afterward: shuffle the discards
+  into a new draw pile, deal 3 new face-up cards, and keep playing — players
+  keep their current hands, and the turn passes to the other player as
+  normal.
+- **3rd scoring (final):** instead of ending the game the instant the pile
+  empties a third time, each player takes **one more turn** first (their
+  last chance to play cards) — *then* final scoring happens. Whoever holds
+  more islands gets points equal to the exact difference in island counts
+  (not a fixed +1/+2 like the interim scorings); if tied, neither scores.
+- **Winner:** whoever has the higher total across all 3 scorings. If that's
+  tied, whoever scored more in the *final* round specifically wins. If
+  that's *also* tied (both scored 0 in the final round), whoever has more
+  bridges on the board wins. If that's still tied, nobody wins.
+- **Premature end:** if, during the 2nd or 3rd scoring round, a player has
+  **zero bridges anywhere on the board**, the game ends immediately and the
+  other player wins outright — no score calculation, and this can end the
+  game before the "one more turn" step above ever happens.
 - Each player's final payoff is their net score difference (so the two
-  payoffs always sum to 0).
+  payoffs always sum to 0), except in a premature end, where the winner's
+  payoff is a win and the loser's a loss regardless of accumulated points.
 
 ## GameSpec
 
