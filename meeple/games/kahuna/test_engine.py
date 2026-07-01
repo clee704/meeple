@@ -236,30 +236,53 @@ def test_hand_limit_blocks_drawing_until_discarded():
 
     after = state.apply_action(DISCARD_BASE + island_idx)
     assert len(after.hands[0]) == HAND_LIMIT - 1
-    assert full_hand[0] in after.discard_hidden  # discarded face-down, not to the open pile
+    assert full_hand[0] in after.hidden_discards[0]  # discarded face-down, not to the open pile
     assert full_hand[0] not in after.discard
     assert DRAW_BLIND in after.legal_actions()  # can draw normally now
 
 
-def test_facedown_discard_identity_is_hidden_but_count_is_not():
+def test_facedown_discard_forces_a_draw():
+    # The discard is only ever the prelude to a draw: once it's made, card
+    # plays and skip are no longer legal this turn -- only draw actions.
+    full_hand = ("ALOA", "ALOA", "BARI", "COCO", "DUDA")
+    state = _state(hands=(full_hand, ()), pile=("ELAI",), face_up=("FAAA", None, None))
+    after = state.apply_action(DISCARD_BASE + ISLANDS.index("BARI"))
+    assert after.legal_actions() == [DRAW_BLIND, FACEUP_BASE + 0]
+
+
+def test_facedown_discard_illegal_when_there_is_nothing_to_draw():
+    # With no draw to enable, the discard has no purpose and isn't offered
+    # (it would otherwise let a player secretly thin their hand).
+    full_hand = tuple(ISLANDS[:HAND_LIMIT])
+    state = _state(hands=(full_hand, ()), pile=(), face_up=(None, None, None))
+    legal = state.legal_actions()
+    assert not any(action >= DISCARD_BASE for action in legal)
+    assert SKIP in legal
+
+
+def test_facedown_discard_identity_is_hidden_from_opponent_but_not_self():
     # Same number of face-down discards, different specific cards: the
-    # count is public (comparable to pile size), but which cards they are
-    # must not leak into either player's information state.
-    aloa = _state(discard_hidden=("ALOA",))
-    bari = _state(discard_hidden=("BARI",))
+    # opponent sees only the count (comparable to pile size), but the
+    # discarder keeps seeing their own card -- collapsing it would merge
+    # information states the acting player can tell apart (imperfect
+    # recall, which corrupts CFR/ISMCTS).
+    aloa = _state(hidden_discards=(("ALOA",), ()))
+    bari = _state(hidden_discards=(("BARI",), ()))
     assert aloa.information_state_key(1) == bari.information_state_key(1)
     assert aloa.information_state_tensor(1).tolist() == bari.information_state_tensor(1).tolist()
+    assert aloa.information_state_key(0) != bari.information_state_key(0)
+    assert aloa.information_state_tensor(0).tolist() != bari.information_state_tensor(0).tolist()
 
     # A different *count* is a genuinely different, visible state.
-    two_hidden = _state(discard_hidden=("ALOA", "BARI"))
+    two_hidden = _state(hidden_discards=(("ALOA", "BARI"), ()))
     assert aloa.information_state_key(1) != two_hidden.information_state_key(1)
 
 
 def test_facedown_and_open_discards_both_get_reshuffled_into_the_pile():
-    state = _state(pile=("ALOA",), discard=("BARI",), discard_hidden=("COCO",))
+    state = _state(pile=("ALOA",), discard=("BARI",), hidden_discards=(("COCO",), ()))
     after = _deplete_pile_and_faceup(state)
     assert after.discard == ()
-    assert after.discard_hidden == ()
+    assert after.hidden_discards == ((), ())
     assert sorted(after.pile) + sorted(c for c in after.face_up if c) == sorted(["BARI", "COCO"])
 
 

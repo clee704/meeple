@@ -18,8 +18,12 @@ with the human via issue #14, rather than guessed:
   advantage exists and should be accounted for in eval, e.g. by
   alternating who starts across a match).
 - Hand limit (5): if your hand is already full when you'd otherwise draw,
-  you discard face-down card(s) first (`discard_facedown`), then draw as
-  normal — drawing itself is never blocked.
+  you discard a card face-down first (`discard_facedown`), then draw as
+  normal — drawing itself is never blocked. The discard is strictly the
+  prelude to that draw: it's only legal while something is drawable, and
+  once made, only draw actions are legal until the turn ends. (The
+  manual's "one or more" also permits discarding extra cards; the engine
+  offers only the single discard needed to get under the limit.)
 - Token supply (10 per player) is a physical-component limit only; a
   digital version isn't bound by it, so it's not enforced here.
 - Premature end is checked only once scoring_count >= 1 (round 2 or 3).
@@ -106,15 +110,20 @@ class KahunaState(State):
     final_turns_remaining: int | None
     premature_winner: int | None
     final_round_winner: int | None = None
-    # Cards discarded face-down for the hand limit (see RULES.md's Turn
-    # structure): these get reshuffled into the pile just like `discard`,
-    # but their identity must stay hidden from the opponent's
-    # information state (see information_state_key/tensor below).
-    discard_hidden: tuple[str, ...] = ()
+    # Per-player cards discarded face-down for the hand limit (see RULES.md's
+    # Turn structure): these get reshuffled into the pile just like `discard`,
+    # but each player sees only their own by identity — the opponent's only
+    # by count (see information_state_key/tensor below).
+    hidden_discards: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
     # RULES.md's information-state tensor lists this explicitly; it's
     # public (both players can see cards being played) and resets at
     # the start of each new turn.
     played_card_this_turn: bool = False
+    # True between a hand-limit face-down discard and the draw it forces:
+    # the discard exists only as the prelude to a draw, so while this is
+    # set only draw actions are legal. Public (the discard action itself
+    # is visible) and reset when the turn ends.
+    discarded_this_turn: bool = False
 
     # --- derived board queries -------------------------------------------------
 
@@ -155,6 +164,17 @@ class KahunaState(State):
         hand = self.hands[player]
         actions: list[Action] = []
 
+        if self.discarded_this_turn:
+            # The face-down discard is only ever the prelude to a draw (see
+            # module docstring): once it's made, the turn must end with one
+            # — no more card plays, no skip.
+            if self.pile:
+                actions.append(DRAW_BLIND)
+            actions.extend(
+                FACEUP_BASE + j for j, card in enumerate(self.face_up) if card is not None
+            )
+            return tuple(actions)
+
         if self._total_bridges(player) < BRIDGE_SUPPLY:
             for pos, (a, b) in enumerate(BRIDGES):
                 if self.bridges[pos] is not None:
@@ -177,9 +197,12 @@ class KahunaState(State):
         if len(hand) >= HAND_LIMIT:
             # Hand limit: discard face-down first, then draw as normal --
             # drawing itself is never directly blocked (see module docstring).
-            for index, island in enumerate(ISLANDS):
-                if island in hand:
-                    actions.append(DISCARD_BASE + index)
+            # No draw to enable means no discard either: it exists only as
+            # the prelude to a draw, never as free hidden hand-thinning.
+            if not self._pile_and_faceup_empty():
+                for index, island in enumerate(ISLANDS):
+                    if island in hand:
+                        actions.append(DISCARD_BASE + index)
         else:
             if self.pile:
                 actions.append(DRAW_BLIND)
@@ -279,7 +302,8 @@ class KahunaState(State):
                 self.bridges,
                 self.face_up,
                 self.discard,
-                len(self.discard_hidden),  # count is public; identities aren't
+                self.hidden_discards[player],  # you know your own face-down discards...
+                len(self.hidden_discards[1 - player]),  # ...but only the count of theirs
                 len(self.pile),
                 self.to_move,
                 self.pending_reason if self.pending else None,
@@ -289,6 +313,7 @@ class KahunaState(State):
                 self.final_turns_remaining,
                 self.premature_winner,
                 self.played_card_this_turn,
+                self.discarded_this_turn,
                 tuple(sorted(self.hands[player])),
             )
         )
@@ -308,7 +333,11 @@ class KahunaState(State):
             values.append(float(sum(1 for c in self.face_up if c == island)))
         for island in ISLANDS:
             values.append(float(self.discard.count(island)))
-        values.append(float(len(self.discard_hidden)))  # count is public; identities aren't
+        # You see your own face-down discards by identity, the opponent's
+        # only by count.
+        for island in ISLANDS:
+            values.append(float(self.hidden_discards[player].count(island)))
+        values.append(float(len(self.hidden_discards[1 - player])))
         values.append(float(len(self.pile)))
         values.append(self.scores[player])
         values.append(self.scores[1 - player])
@@ -318,6 +347,7 @@ class KahunaState(State):
             float(self.final_turns_remaining) if self.final_turns_remaining is not None else -1.0
         )
         values.append(1.0 if self.played_card_this_turn else 0.0)
+        values.append(1.0 if self.discarded_this_turn else 0.0)
         return torch.tensor(values, dtype=torch.float32)
 
     # --- mutation helpers ----------------------------------------------------
@@ -405,10 +435,13 @@ class KahunaState(State):
         player = self.to_move
         hands = list(self.hands)
         hands[player] = _remove_first(hands[player], island)
+        hidden = list(self.hidden_discards)
+        hidden[player] = tuple(sorted(hidden[player] + (island,)))
         return replace(
             self,
             hands=tuple(hands),
-            discard_hidden=tuple(sorted(self.discard_hidden + (island,))),
+            hidden_discards=tuple(hidden),
+            discarded_this_turn=True,
         )
 
     def _finish_turn(self, was_skip: bool = False, just_drew: bool = False) -> "KahunaState":
@@ -439,7 +472,12 @@ class KahunaState(State):
             state = replace(state, final_turns_remaining=state.final_turns_remaining - 1)
             if state.final_turns_remaining == 0:
                 return state._final_scoring()
-        return replace(state, to_move=1 - state.to_move, played_card_this_turn=False)
+        return replace(
+            state,
+            to_move=1 - state.to_move,
+            played_card_this_turn=False,
+            discarded_this_turn=False,
+        )
 
     def _trigger_scoring(self) -> "KahunaState":
         scoring_count = self.scoring_count + 1
@@ -457,7 +495,7 @@ class KahunaState(State):
         # Both the openly-discarded and face-down-discarded cards go back
         # into the pile — the face-down/hidden distinction only matters for
         # what's visible *before* a reshuffle, not for what gets reshuffled.
-        new_pile = tuple(sorted(self.discard + self.discard_hidden))
+        new_pile = tuple(sorted(self.discard + self.hidden_discards[0] + self.hidden_discards[1]))
         num_to_deal = min(NUM_FACEUP_SLOTS, len(new_pile))
         state = replace(
             self,
@@ -465,7 +503,7 @@ class KahunaState(State):
             scoring_count=scoring_count,
             pile=new_pile,
             discard=(),
-            discard_hidden=(),
+            hidden_discards=((), ()),
             face_up=(None, None, None),
             pending=tuple(f"faceup{j}" for j in range(num_to_deal)),
             pending_reason="reshuffle",

@@ -85,13 +85,26 @@ are each one atomic action, even though `remove` costs 2 cards at once:
     later turn.
   - **Skip** — end your turn without drawing at all. Only legal if your
     opponent did **not** also skip on their immediately preceding turn — two
-    skips can't happen back-to-back (unless there's truly nothing left to
-    draw at all, in which case skip is always legal).
+    skips can't happen back-to-back (source 2: "You may abstain from
+    drawing a card, unless your opponent has abstained from drawing a card
+    on his turn immediately before"). Exception: when there's truly nothing
+    left to draw at all, skip is always legal — an engine-level necessity
+    (otherwise nobody could legally end a turn once the deck is exhausted
+    for good in the final phase), settled in issue #14.
 
 Hand limit is 5. If your hand is already at the limit when you'd otherwise
-draw, drawing isn't blocked — instead, discard card(s) face-down first (to
-the discard pile, without revealing which ones) until you're back under
-the limit, then draw as normal.
+draw, drawing isn't blocked — instead, discard a card face-down under the
+discard pile (without revealing which one) to get back under the limit,
+then draw as normal (source 2: "If your hand contains five island cards
+and you cannot or do not want to play any island card(s), you must place
+one or more of your cards face down under the discard pile in order to
+draw a new card"). The face-down discard exists only as the prelude to
+that draw: it's only allowed while there's actually something to draw, and
+once you've discarded you must end the turn by drawing — you can't discard
+and then skip or keep playing cards. (Engine-level details settled in
+issue #14; the manual's "one or more" also permits discarding extra cards,
+which the engine doesn't offer — only the single discard needed to get
+under the limit.)
 
 ```mermaid
 flowchart TD
@@ -176,11 +189,14 @@ tokens per player, in total. Running out limits what you can still play.
   placed tokens, the scores, which round it is, remaining bridge/token
   supplies, the 3 face-up cards, whether the previous turn ended in a skip
   (needed to know if skipping is currently legal), and *how many* cards
-  have been discarded face-down for the hand limit (but not which ones).
+  each player has discarded face-down for the hand limit (but not which
+  ones).
 - **Hidden**: what's in each player's hand, the order of the face-down
   pile, and the specific identity of any card discarded face-down for the
   hand limit (as opposed to a card spent on `place`/`remove`, which is
-  openly played and so stays visible).
+  openly played and so stays visible). Hidden from the *opponent* only —
+  you always still know which cards you discarded yourself, and an
+  engine's information states must preserve that (perfect recall).
 - **Random events**: drawing blind from the face-down pile — whether as
   your own draw, or as the automatic refill after someone takes a face-up
   card. Taking a specific face-up card is a visible, deliberate choice, not
@@ -245,7 +261,8 @@ table below):
 - `140 .. 151` → discard one card face-down, naming the island at index
   `i - 140` in the (alphabetically sorted) island list — the hand-limit
   action described in Turn structure, legal only while your hand is at the
-  limit
+  limit and something is left to draw; after it, only the draw actions are
+  legal until the turn ends
 
 (Exactly how face-up slots are indexed as they get refilled is an
 implementation detail to pin down when the engine is built, not a rules
@@ -272,18 +289,23 @@ your opponent owns that bridge and you hold the specific card(s) that
 variant spends — 2 of one endpoint, or 1 of each (`remove`); skip is legal
 only if the opponent's immediately preceding turn wasn't itself a skip
 (unless there's genuinely nothing left to draw, in which case skip is
-always legal). If your hand is at the limit, draw-blind and take-faceup
-are illegal and only the face-down discard actions are offered instead;
-otherwise draw-blind and each currently-filled face-up slot are legal.
+always legal). Draw-blind is legal only while the face-down pile is
+nonempty; each currently-filled face-up slot is legal. If your hand is at
+the limit, draw-blind and take-faceup are illegal and the face-down
+discard actions are offered instead (only while a draw is available);
+after discarding, only the draw actions are legal until the turn ends.
 
 ## Information-state tensor (for Deep CFR)
 
 Per-bridge owner (3 possibilities × P positions) · per-island control,
 degree, and each player's bridge count there · your hand, counted per
 island (12 numbers) · the 3 public face-up cards · cards seen/discarded so
-far this round · bridges/tokens remaining · which round it is · scores ·
-whether you've already played a card this turn · whether the opponent
-skipped their last turn (so you know if skipping is legal for you).
+far this round (your own face-down discards by identity, the opponent's
+only by count — see Chance & hidden information) · bridges/tokens
+remaining · which round it is · scores · whether you've already played a
+card this turn · whether your hand-limit discard has just committed you to
+drawing · whether the opponent skipped their last turn (so you know if
+skipping is legal for you).
 
 ## Worked example
 
