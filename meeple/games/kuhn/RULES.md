@@ -12,7 +12,7 @@ play for fun, but a good one to learn the rules format on.
 
 ## Status
 
-- [ ] **Human verified** — check once you've compared everything below
+- [x] **Human verified** — check once you've compared everything below
   against a real source.
 - **Sources** — this is a fixed, universally-cited textbook game, so one
   primary source plus OpenSpiel's reference implementation (used here only to
@@ -130,4 +130,4 @@ either fold or call:
 - [x] No open questions remain unresolved.
 - [x] GameSpec and action encoding are fully specified.
 - [x] A worked example is provided.
-- [ ] Human verified, at the top.
+- [x] Human verified, at the top.
