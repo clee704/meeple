@@ -1,39 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 600" font-family="sans-serif" font-size="15">
-  <!-- straight edges: every edge except COCO-KAHU and IFFI-KAHU is a clean
-       line with no other island's node lying on it (verified by script) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 500" font-family="sans-serif" font-size="15">
+  <!-- straight edges: every edge except COCO-KAHU is a clean line with no
+       other island's node lying on it (verified by script) -->
   <g stroke="#555" stroke-width="2">
     <line x1="100" y1="80" x2="400" y2="80"/>   <!-- ALOA-BARI -->
     <line x1="400" y1="80" x2="700" y2="80"/>   <!-- BARI-COCO -->
     <line x1="100" y1="80" x2="250" y2="190"/>  <!-- ALOA-DUDA -->
-    <line x1="100" y1="80" x2="250" y2="410"/>  <!-- ALOA-HUNA -->
+    <line x1="100" y1="80" x2="100" y2="410"/>  <!-- ALOA-HUNA -->
     <line x1="400" y1="80" x2="250" y2="190"/>  <!-- BARI-DUDA -->
     <line x1="400" y1="80" x2="400" y2="300"/>  <!-- BARI-ELAI -->
     <line x1="400" y1="80" x2="550" y2="190"/>  <!-- BARI-FAAA -->
     <line x1="700" y1="80" x2="550" y2="190"/>  <!-- COCO-FAAA -->
     <line x1="700" y1="80" x2="700" y2="300"/>  <!-- COCO-GOLA -->
     <line x1="250" y1="190" x2="400" y2="300"/> <!-- DUDA-ELAI -->
-    <line x1="250" y1="190" x2="250" y2="410"/> <!-- DUDA-HUNA -->
+    <line x1="250" y1="190" x2="100" y2="410"/> <!-- DUDA-HUNA -->
     <line x1="400" y1="300" x2="550" y2="190"/> <!-- ELAI-FAAA -->
-    <line x1="400" y1="300" x2="250" y2="410"/> <!-- ELAI-HUNA -->
+    <line x1="400" y1="300" x2="100" y2="410"/> <!-- ELAI-HUNA -->
     <line x1="400" y1="300" x2="400" y2="410"/> <!-- ELAI-IFFI -->
-    <line x1="400" y1="300" x2="550" y2="410"/> <!-- ELAI-JOJO -->
+    <line x1="400" y1="300" x2="550" y2="300"/> <!-- ELAI-JOJO -->
     <line x1="550" y1="190" x2="700" y2="300"/> <!-- FAAA-GOLA -->
-    <line x1="550" y1="190" x2="550" y2="410"/> <!-- FAAA-JOJO -->
-    <line x1="700" y1="300" x2="550" y2="410"/> <!-- GOLA-JOJO -->
+    <line x1="550" y1="190" x2="550" y2="300"/> <!-- FAAA-JOJO -->
+    <line x1="700" y1="300" x2="550" y2="300"/> <!-- GOLA-JOJO -->
     <line x1="700" y1="300" x2="700" y2="410"/> <!-- GOLA-KAHU -->
-    <line x1="250" y1="410" x2="400" y2="410"/> <!-- HUNA-IFFI -->
-    <line x1="250" y1="410" x2="400" y2="520"/> <!-- HUNA-LALE -->
-    <line x1="400" y1="410" x2="550" y2="410"/> <!-- IFFI-JOJO -->
+    <line x1="100" y1="410" x2="400" y2="410"/> <!-- HUNA-IFFI -->
+    <line x1="100" y1="410" x2="400" y2="520"/> <!-- HUNA-LALE -->
+    <line x1="400" y1="410" x2="550" y2="300"/> <!-- IFFI-JOJO -->
+    <line x1="400" y1="410" x2="700" y2="410"/> <!-- IFFI-KAHU -->
     <line x1="400" y1="410" x2="400" y2="520"/> <!-- IFFI-LALE -->
-    <line x1="550" y1="410" x2="700" y2="410"/> <!-- JOJO-KAHU -->
+    <line x1="550" y1="300" x2="700" y2="410"/> <!-- JOJO-KAHU -->
     <line x1="700" y1="410" x2="400" y2="520"/> <!-- KAHU-LALE -->
   </g>
 
-  <!-- curved edges: these 2 are the only ones with another island's node
-       sitting exactly between their endpoints, so they're bowed around it -->
+  <!-- curved edge: only COCO-KAHU has another island's node (GOLA) sitting
+       exactly between its endpoints -->
   <g stroke="#555" stroke-width="2" fill="none">
     <path d="M 700 80 Q 830 245 700 410"/>  <!-- COCO-KAHU, bows right of GOLA -->
-    <path d="M 400 410 Q 550 290 700 410"/> <!-- IFFI-KAHU, bows above JOJO -->
   </g>
 
   <!-- islands -->
@@ -54,13 +54,13 @@
     <text x="400" y="305" text-anchor="middle">ELAI</text>
     <circle cx="700" cy="300" r="26" fill="#fff" stroke="#333" stroke-width="2"/>
     <text x="700" y="305" text-anchor="middle">GOLA</text>
+    <circle cx="550" cy="300" r="26" fill="#fff" stroke="#333" stroke-width="2"/>
+    <text x="550" y="305" text-anchor="middle">JOJO</text>
 
-    <circle cx="250" cy="410" r="26" fill="#fff" stroke="#333" stroke-width="2"/>
-    <text x="250" y="415" text-anchor="middle">HUNA</text>
+    <circle cx="100" cy="410" r="26" fill="#fff" stroke="#333" stroke-width="2"/>
+    <text x="100" y="415" text-anchor="middle">HUNA</text>
     <circle cx="400" cy="410" r="26" fill="#fff" stroke="#333" stroke-width="2"/>
     <text x="400" y="415" text-anchor="middle">IFFI</text>
-    <circle cx="550" cy="410" r="26" fill="#fff" stroke="#333" stroke-width="2"/>
-    <text x="550" y="415" text-anchor="middle">JOJO</text>
     <circle cx="700" cy="410" r="26" fill="#fff" stroke="#333" stroke-width="2"/>
     <text x="700" y="415" text-anchor="middle">KAHU</text>
 

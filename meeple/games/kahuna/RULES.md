@@ -43,10 +43,10 @@ LALE
 
 (Mermaid's auto-layout couldn't hold this structure without adding
 crossings, so this is a hand-placed SVG instead, using exact coordinates
-matching the physical board. Only 2 of the 27 edges have another island's
-node sitting exactly in between — `COCO-KAHU` (blocked by `GOLA`) and
-`IFFI-KAHU` (blocked by `JOJO`) — so those two are drawn as curves bowing
-around the island in between; every other edge is a straight line.)
+matching the physical board. Only 1 of the 27 edges has another island's
+node sitting exactly in between — `COCO-KAHU` (blocked by `GOLA`) — so
+that one is drawn as a curve bowing around `GOLA`; every other edge is a
+straight line.)
 
   Each island's degree (lines touching it, and its majority threshold — the
   number of bridges needed for strict majority):
