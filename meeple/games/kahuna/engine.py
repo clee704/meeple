@@ -103,6 +103,7 @@ class KahunaState(State):
         premature_winner: int | None,
         final_round_winner: int | None = None,
         discard_hidden: tuple[str, ...] = (),
+        played_card_this_turn: bool = False,
     ):
         self._bridges = bridges
         self._hands = hands
@@ -114,6 +115,10 @@ class KahunaState(State):
         # but their identity must stay hidden from the opponent's
         # information state (see information_state_key/tensor below).
         self._discard_hidden = discard_hidden
+        # RULES.md's information-state tensor lists this explicitly; it's
+        # public (both players can see cards being played) and resets at
+        # the start of each new turn.
+        self._played_card_this_turn = played_card_this_turn
         self._current_player = current_player
         self._pending = pending
         self._pending_reason = pending_reason
@@ -202,6 +207,9 @@ class KahunaState(State):
 
     def apply_action(self, action: Action) -> "KahunaState":
         if self._pending:
+            legal_chance = [outcome for outcome, _prob in self.chance_outcomes()]
+            if action not in legal_chance:
+                raise ValueError(f"illegal chance action {action!r}; legal: {legal_chance}")
             return self._apply_chance(action)
 
         legal = self.legal_actions()
@@ -288,6 +296,7 @@ class KahunaState(State):
                 self._previous_turn_was_skip,
                 self._final_turns_remaining,
                 self._premature_winner,
+                self._played_card_this_turn,
                 tuple(sorted(self._hands[player])),
             )
         )
@@ -316,6 +325,7 @@ class KahunaState(State):
         values.append(
             float(self._final_turns_remaining) if self._final_turns_remaining is not None else -1.0
         )
+        values.append(1.0 if self._played_card_this_turn else 0.0)
         return torch.tensor(values, dtype=torch.float32)
 
     # --- mutation helpers ----------------------------------------------------
@@ -337,6 +347,7 @@ class KahunaState(State):
             final_turns_remaining=self._final_turns_remaining,
             premature_winner=self._premature_winner,
             final_round_winner=self._final_round_winner,
+            played_card_this_turn=self._played_card_this_turn,
         )
         fields.update(overrides)
         return KahunaState(**fields)
@@ -353,6 +364,7 @@ class KahunaState(State):
             bridges=tuple(bridges),
             hands=tuple(hands),
             discard=tuple(sorted(self._discard + (card,))),
+            played_card_this_turn=True,
         )
         for island in (a, b):
             state = state._resolve_new_control(island, player)
@@ -374,6 +386,7 @@ class KahunaState(State):
             bridges=tuple(bridges),
             hands=tuple(hands),
             discard=tuple(sorted(self._discard + (c1, c2))),
+            played_card_this_turn=True,
         )
         return state._check_premature_end()
 
@@ -392,9 +405,13 @@ class KahunaState(State):
     def _check_premature_end(self) -> "KahunaState":
         if self._scoring_count < 1:
             return self
-        for player in (0, 1):
-            if self._total_bridges(player) == 0:
-                return self._replace(premature_winner=1 - player)
+        # RULES.md: "if a player has zero bridges, the game ends and the
+        # *other* player wins" -- implicitly asymmetric. If both players
+        # have zero bridges (a genuinely empty board), there's no "other
+        # player" for the rule to hand a win to, so this doesn't fire.
+        zero_bridge_players = [p for p in (0, 1) if self._total_bridges(p) == 0]
+        if len(zero_bridge_players) == 1:
+            return self._replace(premature_winner=1 - zero_bridge_players[0])
         return self
 
     def _apply_take_faceup(self, slot: int) -> "KahunaState":
@@ -433,6 +450,15 @@ class KahunaState(State):
         if just_drew and state._final_turns_remaining is None and state._pile_and_faceup_empty():
             state = state._trigger_scoring()
             just_entered_final_phase = state._final_turns_remaining is not None
+        # Re-check premature end on every turn-ending action (using
+        # scoring_count as of *this* point, after any scoring cascade above)
+        # not just right after a place/remove: a zero-bridge condition must
+        # not sit undetected once round 2+ begins, even if the turn that
+        # crosses that boundary is a plain draw or skip that never touches
+        # the board itself.
+        state = state._check_premature_end()
+        if state.is_terminal():
+            return state
         # The turn that triggers the final phase doesn't itself count as one
         # of the "one more turn each" — that countdown starts on the *next*
         # turn (RULES.md: each player takes one more turn *after* this one).
@@ -440,7 +466,7 @@ class KahunaState(State):
             state = state._replace(final_turns_remaining=state._final_turns_remaining - 1)
             if state._final_turns_remaining == 0:
                 return state._final_scoring()
-        return state._replace(current_player=1 - state._current_player)
+        return state._replace(current_player=1 - state._current_player, played_card_this_turn=False)
 
     def _trigger_scoring(self) -> "KahunaState":
         scoring_count = self._scoring_count + 1

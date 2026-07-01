@@ -281,9 +281,15 @@ def _deplete_pile_and_faceup(state: KahunaState) -> KahunaState:
 
 
 def test_interim_scoring_1_awards_one_point_to_the_leader():
-    # Player 0 controls ALOA and LALE (2 islands); player 1 controls none.
+    # Player 0 controls ALOA and LALE (2 islands); player 1 controls none
+    # but still holds a harmless bridge elsewhere, so they aren't
+    # incidentally knocked out by the zero-bridges premature-end rule.
     bridges = _bridges_with(
-        ("ALOA", "BARI", 0), ("ALOA", "DUDA", 0), ("HUNA", "LALE", 0), ("IFFI", "LALE", 0)
+        ("ALOA", "BARI", 0),
+        ("ALOA", "DUDA", 0),
+        ("HUNA", "LALE", 0),
+        ("IFFI", "LALE", 0),
+        ("GOLA", "KAHU", 1),
     )
     state = _state(bridges=bridges, pile=("ALOA",), discard=("BARI",))
     after = _deplete_pile_and_faceup(state)
@@ -293,7 +299,9 @@ def test_interim_scoring_1_awards_one_point_to_the_leader():
 
 
 def test_interim_scoring_2_awards_two_points():
-    bridges = _bridges_with(("ALOA", "BARI", 1), ("ALOA", "DUDA", 1))
+    # Player 0 holds a harmless bridge elsewhere so they aren't incidentally
+    # knocked out by the zero-bridges premature-end rule.
+    bridges = _bridges_with(("ALOA", "BARI", 1), ("ALOA", "DUDA", 1), ("GOLA", "KAHU", 0))
     state = _state(bridges=bridges, pile=("ALOA",), scoring_count=1, discard=("BARI",))
     after = _deplete_pile_and_faceup(state)
     assert after._scores == (0.0, 2.0)
@@ -324,7 +332,9 @@ def test_reshuffle_with_empty_discard_cascades_through_remaining_scorings():
     # pile is empty too, so there's no future draw event that could ever
     # detect "depleted again" -- the engine must advance scoring itself
     # instead of getting permanently stuck with nothing left to draw.
-    bridges = _bridges_with(("ALOA", "BARI", 0), ("ALOA", "DUDA", 0))
+    # Player 1 holds a harmless bridge elsewhere so they aren't incidentally
+    # knocked out by the zero-bridges premature-end rule.
+    bridges = _bridges_with(("ALOA", "BARI", 0), ("ALOA", "DUDA", 0), ("GOLA", "KAHU", 1))
     state = _state(bridges=bridges, pile=("ALOA",), discard=())
     after = _deplete_pile_and_faceup(state)
     assert after._scoring_count == 3
@@ -335,6 +345,8 @@ def test_reshuffle_with_empty_discard_cascades_through_remaining_scorings():
 
 
 def test_final_scoring_awards_exact_island_difference():
+    # Player 1 holds a harmless bridge elsewhere so they aren't incidentally
+    # knocked out by the zero-bridges premature-end rule.
     bridges = _bridges_with(
         ("ALOA", "BARI", 0),
         ("ALOA", "DUDA", 0),
@@ -343,6 +355,7 @@ def test_final_scoring_awards_exact_island_difference():
         ("BARI", "COCO", 0),
         ("COCO", "FAAA", 0),
         ("COCO", "GOLA", 0),
+        ("GOLA", "KAHU", 1),
     )
     state = _state(
         bridges=bridges,
@@ -364,16 +377,19 @@ def test_winner_is_the_higher_total_score():
 
 def test_tiebreak_falls_back_to_final_round_winner():
     # Equal totals overall; player 1 wins the final round specifically
-    # (majority on ALOA: 2 of its 3 lines).
+    # (majority on ALOA: 2 of its 3 lines). Player 0 holds a harmless bridge
+    # elsewhere so they aren't incidentally knocked out by the
+    # zero-bridges premature-end rule.
     state = _state(
         scores=(2.0, 1.0),
         scoring_count=3,
         final_turns_remaining=1,
         current_player=0,
-        bridges=_bridges_with(("ALOA", "BARI", 1), ("ALOA", "DUDA", 1)),
+        bridges=_bridges_with(("ALOA", "BARI", 1), ("ALOA", "DUDA", 1), ("GOLA", "KAHU", 0)),
     )
     after = state.apply_action(SKIP)
     assert after.is_terminal()
+    assert after._premature_winner is None  # resolved via the tiebreak, not this
     assert after._scores == (2.0, 2.0)  # tied overall
     assert after.returns() == [0.0, 0.0]  # zero-sum payoff is genuinely tied
     assert after.winner() == 1  # but player 1 won the final round
@@ -381,24 +397,30 @@ def test_tiebreak_falls_back_to_final_round_winner():
 
 def test_tiebreak_falls_back_to_bridge_count_when_final_round_is_also_tied():
     # Equal totals overall, and final round is also a tie (no islands
-    # change hands) -- fall back to whoever has more bridges on the board.
+    # change hands, since neither bridge count reaches any majority) --
+    # fall back to whoever has more bridges on the board. Both players
+    # hold at least one bridge so the zero-bridges premature-end rule
+    # doesn't fire and mask the tiebreak path this test is actually about.
     state = _state(
         scores=(1.0, 1.0),
         scoring_count=3,
         final_turns_remaining=1,
         current_player=0,
-        bridges=_bridges_with(("ALOA", "BARI", 0)),
+        bridges=_bridges_with(("ALOA", "BARI", 0), ("COCO", "FAAA", 0), ("GOLA", "KAHU", 1)),
     )
     after = state.apply_action(SKIP)
     assert after.is_terminal()
     assert after._scores == (1.0, 1.0)
-    assert after.winner() == 0  # only player 0 has a bridge on the board
+    assert after._premature_winner is None  # genuinely resolved via the tiebreak, not this
+    assert after._final_round_winner is None  # final round itself was a tie too
+    assert after.winner() == 0  # player 0 has 2 bridges on the board vs player 1's 1
 
 
 def test_no_winner_when_everything_is_tied():
     state = _state(scores=(1.0, 1.0), scoring_count=3, final_turns_remaining=1, current_player=0)
     after = state.apply_action(SKIP)
     assert after.is_terminal()
+    assert after._premature_winner is None  # a fully empty board isn't premature end
     assert after.winner() is None
 
 
@@ -455,6 +477,12 @@ def test_chance_outcomes_empty_when_not_pending():
     assert state.chance_outcomes() == []
 
 
+def test_illegal_chance_action_rejected():
+    state = _state(pile=("ALOA",), pending=("hand0",), pending_reason="turn")
+    with pytest.raises(ValueError):
+        state.apply_action(ISLANDS.index("BARI"))  # BARI isn't in the pile
+
+
 def test_premature_end_does_not_apply_in_round_1():
     pos = BRIDGES.index(("ELAI", "HUNA"))
     state = _state(
@@ -464,6 +492,19 @@ def test_premature_end_does_not_apply_in_round_1():
     )
     after = state.apply_action(REMOVE_AB_BASE + pos)
     assert not after.is_terminal()
+
+
+def test_premature_end_is_detected_even_when_zero_bridges_predates_the_check():
+    # Regression: the zero-bridge condition can arise while scoring_count is
+    # still 0 (before premature end is even checked). It must be detected
+    # on the *next* turn-ending action -- even a plain skip that never
+    # touches the board -- once round 2 begins, not sit latent until
+    # someone happens to play a place/remove.
+    state = _state(bridges=_bridges_with(("ALOA", "BARI", 0)), scoring_count=1, current_player=1)
+    assert not state.is_terminal()  # player 1 already has 0 bridges, but not yet re-checked
+    after = state.apply_action(SKIP)
+    assert after.is_terminal()
+    assert after.returns() == [1.0, -1.0]
 
 
 # --- determinism / full playthrough ---------------------------------------
@@ -480,6 +521,18 @@ def test_full_playthrough_is_terminal_and_zero_sum():
     final = _random_playthrough(KahunaGame().new_initial_state(), random.Random(1))
     assert final.is_terminal()
     assert sum(final.returns()) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("seed", range(300))
+def test_many_random_playthroughs_terminate_with_valid_zero_sum_returns(seed):
+    # Committed, reproducible version of the ad-hoc stress tests run during
+    # development (which caught real bugs but weren't checked in) -- every
+    # seed must reach a terminal state via only legal actions, with a
+    # zero-sum returns() and a well-defined winner().
+    final = _random_playthrough(KahunaGame().new_initial_state(), random.Random(seed))
+    assert final.is_terminal()
+    assert sum(final.returns()) == pytest.approx(0.0)
+    assert final.winner() in (0, 1, None)
 
 
 def test_returns_before_terminal_raises():
@@ -506,3 +559,13 @@ def test_information_state_key_hides_opponent_hand():
 def test_information_state_tensor_shape_is_stable():
     state = _state(hands=(("ALOA",), ()))
     assert state.information_state_tensor(0).shape == state.information_state_tensor(1).shape
+
+
+def test_played_card_this_turn_is_tracked_and_visible_in_information_state():
+    # RULES.md's information-state tensor section lists this explicitly.
+    before = _state(hands=(("ALOA", "BARI"), ()))
+    pos = BRIDGES.index(("ALOA", "BARI"))
+    after = before.apply_action(PLACE_A_BASE + pos)
+    assert after._played_card_this_turn is True
+    assert after.information_state_key(0) != before.information_state_key(0)
+    assert after.information_state_tensor(0).tolist() != before.information_state_tensor(0).tolist()
