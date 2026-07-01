@@ -31,11 +31,6 @@ part of the game.
 
 ![Kahuna board graph](board.svg)
 
-(Mermaid's auto-layout couldn't hold this structure without adding
-crossings, so this is a hand-placed SVG instead, with coordinates tuned to
-match the physical board layout — all 27 edges are straight lines, none
-passing within a node's radius of any island it doesn't connect to.)
-
   Each island's degree (lines touching it, and its majority threshold — the
   number of bridges needed for strict majority):
 
