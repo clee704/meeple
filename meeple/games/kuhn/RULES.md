@@ -1,23 +1,27 @@
-# Kuhn Poker — Rules contract
+# Kuhn Poker — Rules
 
-> **This document is a hard gate.** No engine code may be written
-> for this game until this file is complete, every rule is cited, all
-> `MUST-VERIFY` items are resolved, and the human sign-off below is checked.
-> Do **not** fill this in from memory — cite a real source for every rule.
+> This file has two jobs: it's the actual rulebook — something a person can
+> read to learn how the game works — *and* it's a gate: no engine code gets
+> written for this game until it's filled in, sourced, and checked off below.
+>
+> Don't fill this in from memory — cite where each rule actually came from.
+
+Kuhn poker is a tiny, deliberately-simplified poker variant designed as a
+minimal test case for game theory — not a game you'd actually sit down and
+play for fun, but a good one to learn the rules format on.
 
 ## Status
 
-- **State:** VERIFIED *(textbook game with one fixed, unambiguous rule set —
-  no open questions; sign-off is still required before engine code is written)*
-- **Human verified:** [ ]  — name / date: ____________________
-- **Sources** (≥2 authoritative; the official rulebook is mandatory):
+- [ ] **Human verified** — check once you've compared everything below
+  against a real source.
+- **Sources** — this is a fixed, universally-cited textbook game, so one
+  primary source plus OpenSpiel's reference implementation (used here only to
+  cross-check the engine, never as a game backend) is plenty:
   1. Kuhn, H.W. (1950), "A Simplified Two-Person Poker", *Contributions to the
      Theory of Games*, vol. 1, Annals of Mathematics Studies 24, Princeton
      University Press, pp. 97–103. (Original definition.)
   2. OpenSpiel game documentation — `kuhn_poker`:
      https://github.com/google-deepmind/open_spiel/blob/master/open_spiel/games/kuhn_poker/kuhn_poker.h
-     (Reference implementation used as this project's cross-check oracle only —
-     never a game backend.)
 
 ## Components & players
 
@@ -35,53 +39,58 @@ left unused. Player 0 acts first.
 
 A betting round of at most 2 rounds of action, in fixed turn order
 (player 0 then player 1, repeating until the round ends). Each player acts
-once per round with exactly one atomic action:
+once per round with exactly one action:
 - `pass` (check if no bet is outstanding, fold if a bet is outstanding)
 - `bet` (bet 1 chip if no bet is outstanding, call if a bet is outstanding)
 
 The round — and the hand — ends as soon as: both players have passed, a bet
-has been called, or a pass follows a bet (fold). No further actions are legal
-after a terminal state is reached.
+has been called, or a pass follows a bet (fold). Nobody can act after that.
 
-## Legal actions (enumeration)
+## Legal actions
 
-At any non-terminal, non-chance state exactly 2 actions are legal for the
-acting player: `pass` (0) and `bet` (1). There is no other branching — Kuhn
-poker has no raises, no fold-vs-call distinction beyond `pass`/`bet`, and no
-draws.
+On a normal turn (it's a player's decision, not the initial card deal) there
+are always exactly 2 options: `pass` (0) and `bet` (1) — there are no raises,
+no separate fold/call actions, and no draws.
 
 ## State transitions & special mechanics
 
-History (sequence of `pass`/`bet`) fully determines the betting state; there
-are exactly 4 possible 2-player histories before showdown/fold, per
-OpenSpiel's enumeration: `pp` (both pass → showdown), `bp` (bet, pass → bettor
-wins), `bb` (bet, call → showdown), `pbp` (pass, bet, pass → bettor wins),
-`pbb` (pass, bet, call → showdown). No fixpoint/cascade logic — pure
-sequential history.
+The sequence of `pass`/`bet` actions so far (the "history") fully determines
+where things stand — there's no other hidden state to track on the betting
+side. There are exactly 5 possible histories before the hand ends:
+
+```mermaid
+flowchart TD
+    Start((deal)) -->|p| P1["p"]
+    Start -->|b| B1["b"]
+    P1 -->|p| PP["pp — showdown"]
+    P1 -->|b| PB["pb"]
+    PB -->|p| PBP["pbp — bettor wins"]
+    PB -->|b| PBB["pbb — showdown"]
+    B1 -->|p| BP["bp — bettor wins"]
+    B1 -->|b| BB["bb — showdown"]
+```
+
+No chain reactions or recomputation — each action just appends one symbol to
+the history, and the terminal check above tells you if the hand is over.
 
 ## Chance & hidden information
 
-- **Public**: betting history (the sequence of `pass`/`bet` actions taken).
-- **Hidden**: each player's own card (private; opponent's card is unknown
-  until showdown).
-- **Chance events**: one chance node at the start of the hand — deal 2 of the
-  3 cards to the 2 players, each of the `3!/(3-2)! = 6` ordered deals equally
-  likely (uniform random permutation of 2 cards from 3).
+- **Public**: the betting history (the sequence of `pass`/`bet` actions taken).
+- **Hidden**: each player's own card — you don't learn your opponent's card
+  until showdown.
+- **Random events**: one deal at the start of the hand — 2 of the 3 cards go
+  to the 2 players, all `3!/(3-2)! = 6` orderings equally likely.
 
 ## Terminal conditions & scoring
 
-A hand ends, and `returns()` is computed, at one of:
+A hand ends, and each player's payoff is computed, at one of:
 - **Fold** (a `pass` immediately follows a `bet`): the player who bet wins the
-  pot; returns = `[+pot_other_paid, -pot_other_paid]` oriented to the folder
-  losing exactly what they put in (ante, or ante+call) and the bettor winning
-  it. Concretely: winner gets `+1` (just the opponent's ante) if no bet was
-  called, or `+2` if a bet was placed and the round ends in a fold before the
-  call.
-- **Showdown** (`pp`, `bb`, or `pbb`): higher card wins the pot. Pot size is
-  `2` chips (1 ante each) if neither player bet (`pp`), or `4` chips (1 ante +
-  1 bet/call each) if both bet (`bb`, `pbb`). Winner's net return is
-  `+1` (showdown after `pp`) or `+2` (showdown after `bb`/`pbb`); loser's
-  return is the negation. `returns()` always sums to 0 (zero-sum).
+  pot. Winner gets `+1` (just the opponent's ante) if the fold happened before
+  any bet was matched, or `+2` if a bet had already been placed.
+- **Showdown** (`pp`, `bb`, or `pbb`): higher card wins the pot. Winner's net
+  gain is `+1` after a `pp` showdown (nobody bet) or `+2` after a `bb`/`pbb`
+  showdown (both bet); the loser's payoff is the same number, negated — the
+  two payoffs always sum to 0.
 
 ## GameSpec
 
@@ -99,24 +108,26 @@ num_distinct_actions  = 2          # pass=0, bet=1
 - `0` → `pass`
 - `1` → `bet`
 
-These are the only two actions in the game; `num_distinct_actions = 2`.
+These are the only two actions in the game.
 
-## Worked example / known position (for tests)
+## Worked example
 
-Deal: player 0 gets Q, player 1 gets K. History `pb` (player 0 passes,
-player 1 bets): at this point it is player 0's decision node, legal actions
-are `[0, 1]` (pass=fold, bet=call). If player 0 passes (folds): terminal,
-`returns() == [-1, +1]`. If player 0 bets (calls) instead, history becomes
-`pbb`: terminal showdown, K > Q so `returns() == [-2, +2]`.
+Say player 0 is dealt Q and player 1 is dealt K, and the hand goes `pb` —
+player 0 passes, then player 1 bets. Now it's back to player 0, who can
+either fold or call:
+- **Fold** (`pass`): hand ends immediately, player 0 loses their ante,
+  payoffs are `[-1, +1]`.
+- **Call** (`bet`): hand goes to showdown at `pbb`. K beats Q, so player 1
+  wins the bigger pot: payoffs are `[-2, +2]`.
 
-## OPEN / MUST-VERIFY (BLOCKING)
+## Open questions
 
-*(none — the game is a fixed, universally-cited textbook definition)*
+*(none — this is a fixed, universally-cited textbook definition)*
 
-## Rules-first checklist
+## Checklist
 
 - [x] Every rule above cites a source.
-- [x] No `MUST-VERIFY` items remain open.
+- [x] No open questions remain unresolved.
 - [x] GameSpec and action encoding are fully specified.
-- [x] At least one worked example is provided.
-- [ ] Human sign-off checked at the top.
+- [x] A worked example is provided.
+- [ ] Human verified, at the top.
