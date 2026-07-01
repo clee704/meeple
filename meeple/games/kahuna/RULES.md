@@ -101,12 +101,28 @@ lines — strictly more than half, not just half. On a 5-line island that's 3
 bridges (half of 5 is 2.5, so 3 clears it); on a 4-line island it's *also*
 3, not 2 — an even split doesn't count as control for either side.
 
-Control only changes hands through a `place`: the moment a placement gives
-you a *new* strict majority on an island, you take that island's control
-token, and every bridge your opponent owns touching that one island is
-removed immediately. This is the only situation where a bridge gets removed
-as a side effect of something else, and it only ever hits the island you
-just took — never a neighbor, no matter how connected the board is.
+Because "strict majority" means more than half of a fixed line count, only
+one player can ever hold it at a time — so every island is either
+controlled by exactly one player, or controlled by nobody. Control never
+transfers directly from one player to the other; `place` and `remove` each
+only push it one way:
+
+- **`place` can only *create* control, and only on an island nobody
+  currently controls.** If your opponent already holds strict majority
+  there, you mathematically cannot out-place them — the remaining free
+  lines can never add up to more than they already have. So the moment a
+  placement gives *you* a new strict majority (only possible on a
+  currently-uncontrolled island), you take that island's control token, and
+  every bridge your opponent owns touching that one island is removed
+  immediately. This is the only situation where a bridge gets removed as a
+  side effect of something else, and it only ever hits the island you just
+  took — never a neighbor, no matter how connected the board is.
+- **`remove` can only *destroy* control, turning a controlled island back
+  into an uncontrolled one.** Whether it's a direct `remove` action, or a
+  bridge stripped as the side effect described below, taking away enough of
+  the controlling player's bridges drops them below strict majority and
+  costs them the token — it never hands control to anyone else in the same
+  step.
 
 That said, removing those bridges can still ripple outward, just not by
 knocking down more bridges. Each bridge you just stripped sat on a line
