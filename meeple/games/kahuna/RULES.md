@@ -41,12 +41,12 @@ LALE
 
 ![Kahuna board graph](board.svg)
 
-(Mermaid's auto-layout couldn't hold this row structure without adding
-crossings, so this is a hand-placed SVG instead — same 27 lines, laid out
-on a 4-row grid matching the physical board. The 3 edges that skip past
-another island's position — `ALOA-HUNA`, `COCO-KAHU`, `IFFI-KAHU` — are
-drawn as curves bowing around the island in between, instead of straight
-lines through it.)
+(Mermaid's auto-layout couldn't hold this structure without adding
+crossings, so this is a hand-placed SVG instead, using exact coordinates
+matching the physical board. Only 2 of the 27 edges have another island's
+node sitting exactly in between — `COCO-KAHU` (blocked by `GOLA`) and
+`IFFI-KAHU` (blocked by `JOJO`) — so those two are drawn as curves bowing
+around the island in between; every other edge is a straight line.)
 
   Each island's degree (lines touching it, and its majority threshold — the
   number of bridges needed for strict majority):
