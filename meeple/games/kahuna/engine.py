@@ -374,7 +374,11 @@ class KahunaState(State):
             played_card_this_turn=True,
         )
         for island in (a, b):
-            state = state._resolve_new_control(island, player)
+            # Rule 2 (RULES.md) fires only on a *new* majority: if `player`
+            # already controlled `island` before this placement, a redundant
+            # extra bridge there must not re-strip the opponent's bridges.
+            if self._controller(island) != player:
+                state = state._resolve_new_control(island, player)
         return state._check_premature_end()
 
     def _apply_remove(self, pos: int, cards: str) -> "KahunaState":

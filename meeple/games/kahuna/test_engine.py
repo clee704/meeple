@@ -189,6 +189,27 @@ def test_dethroning_does_not_grant_first_claim_to_reclaim():
     assert after._controller("HUNA") == 1
 
 
+def test_redundant_placement_on_an_already_controlled_island_does_not_strip_opponent():
+    """Rule 2 (RULES.md) fires only on a *new* majority. If the mover already
+    controls an island, placing an extra bridge there is a no-op for control
+    and must not re-trigger the opponent-bridge-removal side effect."""
+    # BARI: degree 5 (ALOA, COCO, DUDA, ELAI, FAAA); majority 3.
+    bridges = _bridges_with(
+        ("ALOA", "BARI", 0),
+        ("BARI", "COCO", 0),
+        ("BARI", "DUDA", 0),
+        ("BARI", "ELAI", 1),  # opponent's bridge, legally placed after player 0 took control
+    )
+    state = _state(bridges=bridges, hands=(("FAAA",), ()))
+    assert state._controller("BARI") == 0  # already controlled before this move
+
+    pos = BRIDGES.index(("BARI", "FAAA"))
+    after = state.apply_action(PLACE_B_BASE + pos)
+
+    assert after._controller("BARI") == 0  # unchanged
+    assert after.bridges[BRIDGES.index(("BARI", "ELAI"))] == 1  # opponent's bridge survives
+
+
 # --- bridge/token supply --------------------------------------------------
 
 
