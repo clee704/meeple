@@ -12,6 +12,9 @@ interface KahunaObservation {
   opponent_hand_count: number
   face_up: (string | null)[]
   pile_count: number
+  discard: string[]
+  my_hidden_discards: string[]
+  opponent_hidden_discard_count: number
   scores: number[]
   scoring_count: number
   final_turns_remaining: number | null
@@ -40,6 +43,23 @@ const POS: Record<string, [number, number]> = {
 }
 const VIEWBOX = '174 94 442 357'
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
+
+// A pile of `count` cards (card 0 bottommost), top card anchored at the
+// top-left so a shrinking pile pulls in toward it; depth fans lower cards
+// right-down.
+function cardStack(count: number, classFor: (i: number) => string) {
+  if (count === 0) return <span className="card empty" />
+  return Array.from({ length: count }, (_, i) => {
+    const depth = count - 1 - i
+    return (
+      <span
+        key={i}
+        className={classFor(i)}
+        style={{ translate: `${1.2 * depth}px ${0.8 * depth}px` }}
+      />
+    )
+  })
+}
 
 function historyLine(h: HistoryEntry, seat: number): string {
   const who = h.actor === seat ? 'You' : 'Opponent'
@@ -182,6 +202,8 @@ export function KahunaBoard({
   const drawBlind = byKind('draw_blind')[0]
   const skip = byKind('skip')[0]
   const round = Math.min(obs.scoring_count + 1, 3)
+  const hiddenCount = obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
+  const discardCount = obs.discard.length + hiddenCount
 
   return (
     <div className="kahuna">
@@ -197,32 +219,13 @@ export function KahunaBoard({
       </div>
 
       <div>
-        <h3>Your hand</h3>
+        <h3>Opponent's hand</h3>
         <div className="kahuna-cards">
-          {obs.hand.map((card, i) => (
-            <button
-              key={i}
-              className={selCards.includes(i) ? 'card selected' : 'card'}
-              aria-pressed={selCards.includes(i)}
-              onClick={() => toggleCard(i)}
-            >
-              {card}
-            </button>
+          {Array.from({ length: obs.opponent_hand_count }, (_, i) => (
+            <span key={i} className="card facedown" />
           ))}
-          {obs.hand.length === 0 && <span className="dim">empty</span>}
+          {obs.opponent_hand_count === 0 && <span className="dim">empty</span>}
         </div>
-        {yourTurn && selCards.length > 0 && (
-          <div className="action-row kahuna-confirm">
-            <button className="primary" disabled={!plan || busy} onClick={commit}>
-              {commitLabel}
-            </button>
-            {canDiscard && <button onClick={discard}>Discard face-down…</button>}
-            <button onClick={() => { setSelCards([]); setSelBridges([]) }}>Clear</button>
-            {!plan && (
-              <span className="dim">select lines/bridges that spend every selected card</span>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="kahuna-board-row">
@@ -317,19 +320,7 @@ export function KahunaBoard({
                 onClick={() => endTurn(drawBlind)}
                 aria-label={`draw pile, ${obs.pile_count} cards`}
               >
-                {obs.pile_count === 0 && <span className="card empty" />}
-                {Array.from({ length: obs.pile_count }, (_, i) => {
-                  // Anchor the top card at the top-left so a shrinking pile
-                  // pulls in toward it; depth fans lower cards right-down.
-                  const depth = obs.pile_count - 1 - i
-                  return (
-                    <span
-                      key={i}
-                      className="card facedown"
-                      style={{ translate: `${1.2 * depth}px ${0.8 * depth}px` }}
-                    />
-                  )
-                })}
+                {cardStack(obs.pile_count, () => 'card facedown')}
               </button>
               {skip && (
                 <button className="kahuna-skip" onClick={() => endTurn(skip)}>
@@ -338,17 +329,44 @@ export function KahunaBoard({
               )}
             </div>
           </div>
+          <div>
+            <h3>Discard ({discardCount})</h3>
+            {/* One pile, like the table: face-down hand-limit discards
+                slide under it, openly spent cards land face-up on top. */}
+            <div className="pile">
+              {cardStack(discardCount, (i) => (i < hiddenCount ? 'card facedown' : 'card'))}
+            </div>
+          </div>
         </div>
       </div>
 
       <div>
-        <h3>Opponent's hand</h3>
+        <h3>Your hand</h3>
         <div className="kahuna-cards">
-          {Array.from({ length: obs.opponent_hand_count }, (_, i) => (
-            <span key={i} className="card facedown" />
+          {obs.hand.map((card, i) => (
+            <button
+              key={i}
+              className={selCards.includes(i) ? 'card selected' : 'card'}
+              aria-pressed={selCards.includes(i)}
+              onClick={() => toggleCard(i)}
+            >
+              {card}
+            </button>
           ))}
-          {obs.opponent_hand_count === 0 && <span className="dim">empty</span>}
+          {obs.hand.length === 0 && <span className="dim">empty</span>}
         </div>
+        {yourTurn && selCards.length > 0 && (
+          <div className="action-row kahuna-confirm">
+            <button className="primary" disabled={!plan || busy} onClick={commit}>
+              {commitLabel}
+            </button>
+            {canDiscard && <button onClick={discard}>Discard face-down…</button>}
+            <button onClick={() => { setSelCards([]); setSelBridges([]) }}>Clear</button>
+            {!plan && (
+              <span className="dim">select lines/bridges that spend every selected card</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
