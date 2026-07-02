@@ -200,117 +200,119 @@ export function KahunaBoard({
         <h3>Opponent's hand</h3>
         <div className="kahuna-cards">
           {Array.from({ length: obs.opponent_hand_count }, (_, i) => (
-            <span key={i} className="card facedown small" />
+            <span key={i} className="card facedown" />
           ))}
           {obs.opponent_hand_count === 0 && <span className="dim">empty</span>}
         </div>
       </div>
 
-      <svg viewBox={VIEWBOX} className="kahuna-svg">
-        {bridges.map(([a, b], pos) => {
-          const [x1, y1] = POS[a]
-          const [x2, y2] = POS[b]
-          const owner = obs.bridges[pos]
-          const selected = selBridges.includes(pos)
-          const active = selected || (yourTurn && canAdd(pos))
-          const base =
-            owner === null
-              ? selected
-                ? // Ghost of the bridge you're about to build.
-                  { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.55 }
-                : active
-                  ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.6 }
-                  : { stroke: 'var(--line)', strokeWidth: 2, strokeDasharray: '4 5' }
-              : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.45 : 1 }
-          return (
-            <g
-              key={pos}
-              className={selected ? 'bridge active selected' : active ? 'bridge active' : 'bridge'}
-              onClick={active ? () => toggleBridge(pos) : undefined}
-            >
-              <line x1={x1} y1={y1} x2={x2} y2={y2} {...base} />
-              {owner !== null && active && (
-                // Marked (or markable) for demolition.
-                <line
-                  x1={x1}
-                  y1={y1}
-                  x2={x2}
-                  y2={y2}
-                  stroke="var(--danger)"
-                  strokeWidth={selected ? 5 : 10}
-                  strokeDasharray={selected ? '6 4' : undefined}
-                  opacity={selected ? 0.95 : 0.3}
-                />
-              )}
-              {active && <line x1={x1} y1={y1} x2={x2} y2={y2} className="bridge-hit" />}
-            </g>
-          )
-        })}
-        {islands.map((island) => {
-          const [x, y] = POS[island]
-          const controller = obs.control[island]
-          return (
-            <g key={island}>
-              <circle
-                cx={x}
-                cy={y}
-                r={26}
-                fill={controller === null ? 'var(--panel)' : SEAT_COLOR[controller]}
-                stroke="var(--ink)"
-                strokeWidth={1.5}
-              />
-              <text
-                x={x}
-                y={y + 4}
-                textAnchor="middle"
-                fontSize={13}
-                fill={controller === null ? 'var(--ink)' : '#fff'}
+      <div className="kahuna-board-row">
+        <svg viewBox={VIEWBOX} className="kahuna-svg">
+          {bridges.map(([a, b], pos) => {
+            const [x1, y1] = POS[a]
+            const [x2, y2] = POS[b]
+            const owner = obs.bridges[pos]
+            const selected = selBridges.includes(pos)
+            const active = selected || (yourTurn && canAdd(pos))
+            const base =
+              owner === null
+                ? selected
+                  ? // Ghost of the bridge you're about to build.
+                    { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.55 }
+                  : active
+                    ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.6 }
+                    : { stroke: 'var(--line)', strokeWidth: 2, strokeDasharray: '4 5' }
+                : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.45 : 1 }
+            return (
+              <g
+                key={pos}
+                className={selected ? 'bridge active selected' : active ? 'bridge active' : 'bridge'}
+                onClick={active ? () => toggleBridge(pos) : undefined}
               >
-                {island}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
-
-      <div className="kahuna-supply">
-        <div>
-          <h3>Face-up</h3>
-          <div className="kahuna-cards">
-            {obs.face_up.map((card, slot) => {
-              const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
-              if (card === null) return <span key={slot} className="card empty" />
-              return (
-                <button key={slot} className="card" disabled={!la} onClick={() => endTurn(la)}>
-                  {card}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        <div>
-          <h3>Pile ({obs.pile_count})</h3>
-          <div className="kahuna-pile-wrap">
-            <button
-              className="pile"
-              disabled={!drawBlind}
-              onClick={() => endTurn(drawBlind)}
-              aria-label={`draw pile, ${obs.pile_count} cards`}
-            >
-              {obs.pile_count === 0 && <span className="card empty" />}
-              {Array.from({ length: obs.pile_count }, (_, i) => (
-                <span
-                  key={i}
-                  className="card facedown pile-card"
-                  style={{ translate: `${-1.2 * i}px ${-0.8 * i}px` }}
+                <line x1={x1} y1={y1} x2={x2} y2={y2} {...base} />
+                {owner !== null && active && (
+                  // Marked (or markable) for demolition.
+                  <line
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    stroke="var(--danger)"
+                    strokeWidth={selected ? 5 : 10}
+                    strokeDasharray={selected ? '6 4' : undefined}
+                    opacity={selected ? 0.95 : 0.3}
+                  />
+                )}
+                {active && <line x1={x1} y1={y1} x2={x2} y2={y2} className="bridge-hit" />}
+              </g>
+            )
+          })}
+          {islands.map((island) => {
+            const [x, y] = POS[island]
+            const controller = obs.control[island]
+            return (
+              <g key={island}>
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={26}
+                  fill={controller === null ? 'var(--panel)' : SEAT_COLOR[controller]}
+                  stroke="var(--ink)"
+                  strokeWidth={1.5}
                 />
-              ))}
-            </button>
-            {skip && (
-              <button className="kahuna-skip" onClick={() => endTurn(skip)}>
-                Skip draw
+                <text
+                  x={x}
+                  y={y + 4}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fill={controller === null ? 'var(--ink)' : '#fff'}
+                >
+                  {island}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+
+        <div className="kahuna-supply">
+          <div>
+            <h3>Face-up</h3>
+            <div className="kahuna-cards">
+              {obs.face_up.map((card, slot) => {
+                const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
+                if (card === null) return <span key={slot} className="card empty" />
+                return (
+                  <button key={slot} className="card" disabled={!la} onClick={() => endTurn(la)}>
+                    {card}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div>
+            <h3>Pile ({obs.pile_count})</h3>
+            <div className="kahuna-pile-wrap">
+              <button
+                className="pile"
+                disabled={!drawBlind}
+                onClick={() => endTurn(drawBlind)}
+                aria-label={`draw pile, ${obs.pile_count} cards`}
+              >
+                {obs.pile_count === 0 && <span className="card empty" />}
+                {Array.from({ length: obs.pile_count }, (_, i) => (
+                  <span
+                    key={i}
+                    className="card facedown pile-card"
+                    style={{ translate: `${-1.2 * i}px ${-0.8 * i}px` }}
+                  />
+                ))}
               </button>
-            )}
+              {skip && (
+                <button className="kahuna-skip" onClick={() => endTurn(skip)}>
+                  Skip draw
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

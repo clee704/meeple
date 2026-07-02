@@ -198,21 +198,28 @@ button.card:not(:disabled) {
   border-color: #26564d;
 }
 
-.card.small {
-  width: 40px;
-  height: 56px;
-}
-
 .card.empty {
   border-style: dashed;
   border-color: var(--line);
   background: transparent;
 }
 
+.kahuna-board-row {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.kahuna-board-row .kahuna-svg {
+  flex: 1 1 420px;
+  min-width: 320px;
+}
+
 .kahuna-supply {
   display: flex;
-  gap: 2.5rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .kahuna-pile-wrap {
