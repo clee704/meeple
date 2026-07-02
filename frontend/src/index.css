@@ -165,19 +165,19 @@ input {
   gap: 0.5rem;
   flex-wrap: wrap;
   align-items: flex-end;
-  min-height: 82px;
+  min-height: 94px;
 }
 
 .card {
-  width: 54px;
-  height: 76px;
+  width: 62px;
+  height: 88px;
   border: 1.5px solid var(--ink);
   border-radius: 8px;
   background: var(--panel);
   display: inline-grid;
   place-items: center;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--ink);
   padding: 0;
@@ -230,8 +230,8 @@ button.card:not(:disabled) {
 
 .pile {
   position: relative;
-  width: 76px;
-  height: 92px;
+  width: 84px;
+  height: 102px;
   border: none;
   border-radius: 8px;
   background: none;
