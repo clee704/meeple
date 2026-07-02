@@ -6,18 +6,19 @@
   --line: #ddd7cb;
   --accent: #1d6f5c;
   --accent-ink: #ffffff;
-  --p0: #da4d52; /* seat 0 — red */
+  --p0: #db6566; /* seat 0 — red */
   --p0-ink: #ffffff; /* label on a seat-0-colored island */
-  --p1: #f9c700; /* seat 1 — yellow */
+  --p1: #facd07; /* seat 1 — yellow */
   --p1-ink: var(--ink); /* label on a seat-1-colored island */
   --danger: #9c2f2f;
   --danger-ink: #ffffff;
-  --board: #5bc1ef; /* sea around the islands */
-  --island: #2ba549; /* unoccupied island */
+  --board: #0477b0; /* sea around the islands */
+  --island: #2e8836; /* unoccupied island */
   --island-ink: #ffffff; /* label on an unoccupied island */
+  --island-edge: var(--ink); /* island outline */
   --route: rgba(255, 255, 255, 0.9); /* unbuilt route dashes on the board */
-  --cardback: #2f5d8a; /* face-down card */
-  --cardback-stripe: #3f77ad;
+  --cardback: #0477b0; /* face-down card */
+  --cardback-stripe: #105a93;
   --cardback-edge: #26496b;
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);

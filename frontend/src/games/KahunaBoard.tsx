@@ -319,7 +319,7 @@ export function KahunaBoard({
                   cy={y}
                   r={26}
                   fill={controller === null ? 'var(--island)' : SEAT_COLOR[controller]}
-                  stroke="var(--ink)"
+                  stroke="var(--island-edge)"
                   strokeWidth={1.0}
                 />
                 <text
