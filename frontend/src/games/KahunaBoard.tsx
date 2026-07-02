@@ -249,8 +249,19 @@ export function KahunaBoard({
     <div className="kahuna">
       <div className="kahuna-status">
         <span>
-          Scores: <b style={{ color: SEAT_COLOR[seat] }}>you {obs.scores[seat]}</b> ·{' '}
-          <b style={{ color: SEAT_COLOR[1 - seat] }}>them {obs.scores[1 - seat]}</b>
+          Scores:{' '}
+          <b
+            className="seat-pill"
+            style={{ background: SEAT_COLOR[seat], color: SEAT_LABEL[seat] }}
+          >
+            you {obs.scores[seat]}
+          </b>{' '}
+          <b
+            className="seat-pill"
+            style={{ background: SEAT_COLOR[1 - seat], color: SEAT_LABEL[1 - seat] }}
+          >
+            them {obs.scores[1 - seat]}
+          </b>
         </span>
         <span>Round {round}/3</span>
         {obs.final_turns_remaining !== null && (

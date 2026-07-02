@@ -6,16 +6,16 @@
   --line: #ddd7cb;
   --accent: #1d6f5c;
   --accent-ink: #ffffff;
-  --p0: #db6566; /* seat 0 — red */
-  --p0-ink: #ffffff; /* label on a seat-0-colored island */
-  --p1: #facd07; /* seat 1 — yellow */
-  --p1-ink: var(--ink); /* label on a seat-1-colored island */
+  --p0: #24211e; /* seat 0 — black */
+  --p0-ink: #ffffff; /* label on a seat-0-colored surface */
+  --p1: #ffffff; /* seat 1 — white */
+  --p1-ink: var(--ink); /* label on a seat-1-colored surface */
   --danger: #9c2f2f;
   --danger-ink: #ffffff;
   --board: #0477b0; /* sea around the islands */
   --island: #2e8836; /* unoccupied island */
   --island-ink: #ffffff; /* label on an unoccupied island */
-  --island-edge: var(--ink); /* island outline */
+  --island-edge: #efecda; /* island outline */
   --route: rgba(255, 255, 255, 0.9); /* unbuilt route dashes on the board */
   --cardback: #0477b0; /* face-down card */
   --cardback-stripe: #105a93;
@@ -135,6 +135,15 @@ input {
   flex-wrap: wrap;
   gap: 1rem;
   font-size: 0.9rem;
+}
+
+/* Score chip in your seat's bridge color — readable even when that
+   color matches the page background (white). */
+.seat-pill {
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  font-weight: 700;
 }
 
 .kahuna-svg {
