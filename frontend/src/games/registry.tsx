@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import type { HistoryEntry, LegalAction } from '../types'
+import { KahunaBoard } from './KahunaBoard'
 import { KuhnBoard } from './KuhnBoard'
 
 // The per-game plugin contract: everything a renderer gets is either
@@ -17,5 +18,6 @@ export interface GameRendererProps {
 }
 
 export const renderers: Record<string, ComponentType<GameRendererProps>> = {
+  kahuna: KahunaBoard,
   kuhn: KuhnBoard,
 }
