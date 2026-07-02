@@ -47,7 +47,7 @@ const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
 // A pile of `count` cards (card 0 bottommost), top card anchored at the
 // top-left so a shrinking pile pulls in toward it; depth fans lower cards
 // right-down.
-function cardStack(count: number, classFor: (i: number) => string, labelFor?: (i: number) => string | null) {
+function cardStack(count: number, classFor: (i: number) => string) {
   if (count === 0) return <span className="card empty" />
   return Array.from({ length: count }, (_, i) => {
     const depth = count - 1 - i
@@ -56,9 +56,7 @@ function cardStack(count: number, classFor: (i: number) => string, labelFor?: (i
         key={i}
         className={classFor(i)}
         style={{ translate: `${1.2 * depth}px ${0.8 * depth}px` }}
-      >
-        {labelFor?.(i)}
-      </span>
+      />
     )
   })
 }
@@ -207,8 +205,8 @@ export function KahunaBoard({
   const discardCount =
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
 
-  // Briefly show the opponent's openly played cards face-up on top of the
-  // discard pile before they flip over, so you can see what they spent.
+  // Briefly show the opponent's openly played cards face-up beside the
+  // discard pile before they merge into it, so you can see what they spent.
   const [revealed, setRevealed] = useState<string[]>([])
   const seenHistory = useRef(history.length)
   useEffect(() => {
@@ -224,7 +222,27 @@ export function KahunaBoard({
   }, [history, seat])
   // Clamped: a reshuffle can empty the discard pile mid-reveal.
   const revealCount = Math.min(revealed.length, discardCount)
-  const flipAt = discardCount - revealCount
+
+  // Flag cards that just entered your hand — a blind draw is easy to miss.
+  // Your hand is sorted, so the newcomer is found by multiset diff.
+  const [justDrawn, setJustDrawn] = useState<number[]>([])
+  const prevHand = useRef(obs.hand)
+  useEffect(() => {
+    const prev = prevHand.current
+    if (prev.join('|') === obs.hand.join('|')) return
+    prevHand.current = obs.hand
+    const rest = [...prev]
+    const added: number[] = []
+    obs.hand.forEach((card, i) => {
+      const at = rest.indexOf(card)
+      if (at >= 0) rest.splice(at, 1)
+      else added.push(i)
+    })
+    setJustDrawn(added)
+    if (added.length === 0) return
+    const t = setTimeout(() => setJustDrawn([]), 2500)
+    return () => clearTimeout(t)
+  }, [obs.hand])
 
   return (
     <div className="kahuna">
@@ -352,11 +370,18 @@ export function KahunaBoard({
           </div>
           <div>
             <h3>Discard pile ({discardCount})</h3>
-            <div className="pile">
-              {cardStack(
-                discardCount,
-                (i) => (i < flipAt ? 'card facedown' : 'card'),
-                (i) => (i < flipAt ? null : revealed[revealed.length - revealCount + (i - flipAt)]),
+            <div className="kahuna-pile-wrap">
+              <div className="pile">
+                {cardStack(discardCount - revealCount, () => 'card facedown')}
+              </div>
+              {revealCount > 0 && (
+                <div className="kahuna-cards">
+                  {revealed.slice(revealed.length - revealCount).map((card, i) => (
+                    <span key={i} className="card revealed">
+                      {card}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -369,7 +394,13 @@ export function KahunaBoard({
           {obs.hand.map((card, i) => (
             <button
               key={i}
-              className={selCards.includes(i) ? 'card selected' : 'card'}
+              className={[
+                'card',
+                selCards.includes(i) && 'selected',
+                justDrawn.includes(i) && 'drawn',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               aria-pressed={selCards.includes(i)}
               onClick={() => toggleCard(i)}
             >
@@ -395,9 +426,12 @@ export function KahunaBoard({
       <div>
         <h3>Log</h3>
         <ul className="kahuna-log">
-          {history.slice(-8).map((h, i) => (
-            <li key={history.length - 8 + i}>{historyLine(h, seat)}</li>
-          ))}
+          {history
+            .slice(-8)
+            .reverse()
+            .map((h, i) => (
+              <li key={history.length - i}>{historyLine(h, seat)}</li>
+            ))}
         </ul>
       </div>
     </div>

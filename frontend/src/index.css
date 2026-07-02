@@ -204,6 +204,31 @@ button.card:not(:disabled) {
   background: transparent;
 }
 
+/* Opponent's just-played cards, face-up beside the discard pile. */
+.card.revealed {
+  animation: card-reveal 0.25s ease-out;
+}
+
+@keyframes card-reveal {
+  from {
+    opacity: 0;
+    translate: -10px 0;
+  }
+}
+
+/* A card that just entered your hand: lifted and glowing, then settles. */
+.card.drawn {
+  animation: card-drawn 2.5s ease;
+}
+
+@keyframes card-drawn {
+  0%,
+  60% {
+    box-shadow: 0 0 0 3px var(--accent);
+    translate: 0 -8px;
+  }
+}
+
 .kahuna-board-row {
   display: flex;
   gap: 1.25rem;
