@@ -170,9 +170,11 @@ so progress must be durable and resumable from the repo alone:
    `zero_sum`, `num_distinct_actions`, action labels.
 3. Implement the engine + `State`/`Game` adapter behind `framework/`.
 4. Write and pass tests. **(Gate G3.)**
-5. Register the game in the registry (`meeple/web/registry.py` / `meeple/games/__init__.py`).
+5. Register the game — and its `GameView` if it's web-playable — in
+   `meeple/games/__init__.py` (both go through `meeple/framework/registry.py`).
 6. Reuse existing AI (pick via the matrix), the eval harness, and the web
-   backend; add only a per-game renderer/action-codec. **No core changes (G8).**
+   backend; add only a per-game `view.py` (the `GameView` SPI) and one React
+   renderer component in `frontend/src/games/`. **No core changes (G8).**
 
 ## Solver-compatibility matrix
 
