@@ -15,7 +15,7 @@
   --board: #0477b0; /* sea around the islands */
   --island: #2e8836; /* unoccupied island */
   --island-ink: #ffffff; /* label on an unoccupied island */
-  --island-edge: #efecda; /* island outline */
+  --island-edge: #ede093; /* island outline */
   --route: rgba(255, 255, 255, 0.9); /* unbuilt route dashes on the board */
   --cardback: #0477b0; /* face-down card */
   --cardback-stripe: #105a93;
@@ -23,6 +23,8 @@
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);
   background: var(--bg);
+  cursor: default;
+  user-select: none;
 }
 
 * {
@@ -205,6 +207,13 @@ input {
 
 button.card:not(:disabled) {
   cursor: pointer;
+}
+
+/* Cards and piles stay full-color while disabled (off-turn / illegal):
+   the disabled state only removes the cursor and hover affordances. */
+button.card:disabled,
+button.pile:disabled {
+  opacity: 1;
 }
 
 .card.selected {

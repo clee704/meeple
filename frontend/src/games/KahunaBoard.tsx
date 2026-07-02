@@ -126,7 +126,6 @@ export function KahunaBoard({
   }
 
   const toggleCard = (i: number) => {
-    if (!yourTurn) return
     if (selCards.includes(i)) {
       const next = selCards.filter((j) => j !== i)
       // Drop the board selection if the remaining cards can't pay for it.
@@ -354,10 +353,8 @@ export function KahunaBoard({
               {obs.face_up.map((card, slot) => {
                 const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
                 if (card === null) return <span key={slot} className="card empty" />
-                // Never disabled: like your hand, supply cards keep their
-                // normal look off-turn and the click is simply a no-op.
                 return (
-                  <button key={slot} className="card" onClick={() => endTurn(la)}>
+                  <button key={slot} className="card" disabled={!la} onClick={() => endTurn(la)}>
                     {card}
                   </button>
                 )
@@ -369,6 +366,7 @@ export function KahunaBoard({
             <div className="kahuna-pile-wrap">
               <button
                 className="pile"
+                disabled={!drawBlind}
                 onClick={() => endTurn(drawBlind)}
                 aria-label={`draw pile, ${obs.pile_count} cards`}
               >
@@ -413,6 +411,7 @@ export function KahunaBoard({
                 .filter(Boolean)
                 .join(' ')}
               aria-pressed={selCards.includes(i)}
+              disabled={!yourTurn}
               onClick={() => toggleCard(i)}
             >
               {card}
