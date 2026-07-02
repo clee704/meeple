@@ -91,7 +91,7 @@ export function KahunaBoard({
   submitAction,
 }: GameRendererProps) {
   const obs = observation as unknown as KahunaObservation
-  const { islands, bridges, majority } = meta as unknown as KahunaMeta
+  const { islands, bridges } = meta as unknown as KahunaMeta
   const [chooser, setChooser] = useState<number | null>(null) // bridge pos
 
   const byBridge = useMemo(() => {
@@ -143,6 +143,7 @@ export function KahunaBoard({
           const [x2, y2] = POS[b]
           const owner = obs.bridges[pos]
           const actionable = yourTurn && byBridge.has(pos)
+          const actionableKind = actionable ? (owner === null ? 'place' : 'remove') : null
           return (
             <line
               key={pos}
@@ -153,7 +154,7 @@ export function KahunaBoard({
               stroke={owner === null ? 'var(--line)' : SEAT_COLOR[owner]}
               strokeWidth={owner === null ? 2 : 5}
               strokeDasharray={owner === null ? '4 5' : undefined}
-              className={actionable ? 'bridge actionable' : 'bridge'}
+              className={actionableKind ? `bridge actionable-${actionableKind}` : 'bridge'}
               onClick={() => clickBridge(pos)}
             />
           )
@@ -179,9 +180,6 @@ export function KahunaBoard({
                 fill={controller === null ? 'var(--ink)' : '#fff'}
               >
                 {island}
-              </text>
-              <text x={x} y={y + 17} textAnchor="middle" fontSize={9} fill="var(--dim)">
-                {majority[island]}
               </text>
             </g>
           )
@@ -239,7 +237,7 @@ export function KahunaBoard({
             ))}
             {byKind('skip').map((la) => (
               <button key={la.action} onClick={() => pick(la)}>
-                Skip turn
+                Skip draw
               </button>
             ))}
           </div>
