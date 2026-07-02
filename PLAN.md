@@ -145,7 +145,7 @@ repeat via the onboarding recipe in `CLAUDE.md`.
 |---|-------|-----|-------|-------|
 | 0 | Setup | platform | venv, `pyproject.toml`, dev tooling (ruff/vulture/deptry/import-linter/pytest), pre-commit + CI | [#1](https://github.com/clee704/meeple/issues/1) (closed) |
 | 1 | Framework seam | platform | `Game`/`State`/`GameSpec`/registry, native Kuhn poker, `OpenSpielAdapter` (oracle), `random_agent` | [#2](https://github.com/clee704/meeple/issues/2) (closed) |
-| 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | [#3](https://github.com/clee704/meeple/issues/3) |
+| 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | [#3](https://github.com/clee704/meeple/issues/3) (closed) |
 | 3 | Terminal UI | shell + per-game renderer | game-agnostic CLI shell + Kahuna ASCII renderer; human-vs-human | [#4](https://github.com/clee704/meeple/issues/4) |
 | 4 | AI: heuristic + MCTS + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py`, `ai/mcts.py`, `ai/ismcts.py` | [#5](https://github.com/clee704/meeple/issues/5) |
 | 5 | Eval harness | platform | `eval/tournament.py`, `eval/exploitability.py` validated vs OpenSpiel on Kuhn | [#6](https://github.com/clee704/meeple/issues/6) |
@@ -156,11 +156,11 @@ repeat via the onboarding recipe in `CLAUDE.md`.
 | 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes | [#11](https://github.com/clee704/meeple/issues/11) |
 | 11 | Polish / deploy | platform | checkpoints, difficulty levels, `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
 
-Status right now: **Phase 0 and 1 done** (tooling committed; framework seam,
-native Kuhn, `OpenSpielAdapter`, `random_agent` implemented and tested).
-**Phase 2 is gated** — see `meeple/games/kahuna/RULES.md`'s open
-`MUST-VERIFY` items (board graph/bridge count, removal cost, draw mechanics)
-before any Kahuna engine code.
+Status right now: **Phases 0-2 done** (tooling committed; framework seam,
+native Kuhn, `OpenSpielAdapter`, `random_agent` implemented and tested; the
+Kahuna engine — `graph.py` + `engine.py`, 152 actions, full scoring/tiebreak/
+premature-end, 100% engine coverage — merged to `master` in #15). **Phase 3
+(terminal UI) is next** — see [#4](https://github.com/clee704/meeple/issues/4).
 
 ---
 
