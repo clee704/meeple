@@ -100,9 +100,11 @@ export function MatchScreen({
   const submitAction = async (action: number) => {
     try {
       absorb(await postAction(session, action))
+      return true
     } catch (err) {
       if (err instanceof ApiError) onError(err.message)
       else onError(String(err))
+      return false
     }
   }
 

@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { HistoryEntry, LegalAction } from '../types'
 import type { GameRendererProps } from './registry'
+import { matchSelection, payOptionsByBridge } from './kahunaSelect'
 
-// Shape of meeple/games/kahuna/view.py's observation/meta payloads.
+// Shape of meeple/games/kahuna/view.py's observation/meta payloads (the
+// fields this renderer uses).
 interface KahunaObservation {
   bridges: (number | null)[]
   control: Record<string, number | null>
@@ -10,19 +12,14 @@ interface KahunaObservation {
   opponent_hand_count: number
   face_up: (string | null)[]
   pile_count: number
-  discard: string[]
-  my_hidden_discards: string[]
-  opponent_hidden_discard_count: number
   scores: number[]
   scoring_count: number
-  to_move: number | null
   final_turns_remaining: number | null
 }
 
 interface KahunaMeta {
   islands: string[]
   bridges: [string, string][]
-  majority: Record<string, number>
 }
 
 // Island positions, hand-placed to match meeple/games/kahuna/board.svg;
@@ -43,18 +40,6 @@ const POS: Record<string, [number, number]> = {
 }
 const VIEWBOX = '174 94 442 357'
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
-
-function countCards(cards: string[]): [string, number][] {
-  const counts = new Map<string, number>()
-  for (const c of cards) counts.set(c, (counts.get(c) ?? 0) + 1)
-  return [...counts.entries()]
-}
-
-function variantLabel(la: LegalAction): string {
-  const spend = la.meta.spend as string[]
-  const verb = la.meta.kind === 'place' ? 'Build' : 'Remove'
-  return `${verb}, paying ${spend.join(' + ')}`
-}
 
 function historyLine(h: HistoryEntry, seat: number): string {
   const who = h.actor === seat ? 'You' : 'Opponent'
@@ -92,32 +77,111 @@ export function KahunaBoard({
 }: GameRendererProps) {
   const obs = observation as unknown as KahunaObservation
   const { islands, bridges } = meta as unknown as KahunaMeta
-  const [chooser, setChooser] = useState<number | null>(null) // bridge pos
 
-  const byBridge = useMemo(() => {
-    const map = new Map<number, LegalAction[]>()
-    for (const la of legalActions) {
-      if (la.meta.kind === 'place' || la.meta.kind === 'remove') {
-        const pos = la.meta.bridge as number
-        map.set(pos, [...(map.get(pos) ?? []), la])
-      }
-    }
-    return map
-  }, [legalActions])
+  // Card-first selection, mirroring the physical game: pick the card(s) to
+  // spend, then pick the line(s)/bridge(s) they pay for, then confirm.
+  const [selCards, setSelCards] = useState<number[]>([]) // indices into obs.hand
+  const [selBridges, setSelBridges] = useState<number[]>([]) // bridge positions
+  const [busy, setBusy] = useState(false) // an action (or batch) is in flight
 
+  useEffect(() => {
+    setSelCards([])
+    setSelBridges([])
+  }, [observation])
+
+  const optionsByPos = useMemo(() => payOptionsByBridge(legalActions), [legalActions])
   const byKind = (kind: string) => legalActions.filter((la) => la.meta.kind === kind)
 
-  const pick = (la: LegalAction) => {
-    setChooser(null)
-    submitAction(la.action)
+  const selNames = selCards.map((i) => obs.hand[i])
+  const selOptions = selBridges.map((pos) => optionsByPos.get(pos) ?? [])
+
+  // A line/bridge is selectable iff adding it keeps every selected
+  // line/bridge payable out of the selected cards — so with nothing
+  // selected, nothing highlights.
+  const canAdd = (pos: number): boolean => {
+    const opts = optionsByPos.get(pos)
+    if (!opts) return false
+    return matchSelection([...selOptions, opts], selNames, false) !== null
   }
 
-  const clickBridge = (pos: number) => {
-    const variants = byBridge.get(pos)
-    if (!variants) return
-    if (variants.length === 1) pick(variants[0])
-    else setChooser(chooser === pos ? null : pos)
+  const toggleCard = (i: number) => {
+    if (!yourTurn) return
+    if (selCards.includes(i)) {
+      const next = selCards.filter((j) => j !== i)
+      // Drop the board selection if the remaining cards can't pay for it.
+      const names = next.map((j) => obs.hand[j])
+      if (matchSelection(selOptions, names, false) === null) setSelBridges([])
+      setSelCards(next)
+    } else {
+      setSelCards([...selCards, i])
+    }
   }
+
+  const toggleBridge = (pos: number) => {
+    if (selBridges.includes(pos)) setSelBridges(selBridges.filter((p) => p !== pos))
+    else if (canAdd(pos)) setSelBridges([...selBridges, pos])
+  }
+
+  // Removes go first: a place's majority cascade can strip an opponent
+  // bridge that's also selected for removal, but a remove never invalidates
+  // another selected play.
+  const orderedSel = [...selBridges].sort(
+    (a, b) => Number(obs.bridges[a] === null) - Number(obs.bridges[b] === null),
+  )
+  const plan =
+    selBridges.length > 0
+      ? matchSelection(
+          orderedSel.map((pos) => optionsByPos.get(pos) ?? []),
+          selNames,
+          true,
+        )
+      : null
+
+  const run = async (fn: () => Promise<unknown>) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await fn()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const commit = () =>
+    run(async () => {
+      for (const opt of plan ?? []) if (!(await submitAction(opt.action))) return
+    })
+
+  const discardActions = new Map(
+    byKind('discard').map((la) => [la.meta.island as string, la.action]),
+  )
+  const canDiscard =
+    selBridges.length === 0 && selNames.length > 0 && selNames.every((n) => discardActions.has(n))
+
+  const discard = () => {
+    const n = selNames.length
+    const msg =
+      `Discard ${n} card${n > 1 ? 's' : ''} (${selNames.join(', ')}) face-down? ` +
+      `You can't play cards after discarding — you must end your turn by drawing.`
+    if (!confirm(msg)) return
+    const actions = selNames.map((name) => discardActions.get(name)!)
+    return run(async () => {
+      for (const a of actions) if (!(await submitAction(a))) return
+    })
+  }
+
+  const endTurn = (la: LegalAction | undefined) => la && run(() => submitAction(la.action))
+
+  const nPlace = selBridges.filter((p) => obs.bridges[p] === null).length
+  const nRemove = selBridges.length - nPlace
+  const parts = []
+  if (nPlace) parts.push(`build ${nPlace}`)
+  if (nRemove) parts.push(`remove ${nRemove}`)
+  const commitLabel = parts.length ? `Confirm: ${parts.join(' + ')}` : 'Confirm'
+
+  const drawBlind = byKind('draw_blind')[0]
+  const skip = byKind('skip')[0]
+  const round = Math.min(obs.scoring_count + 1, 3)
 
   return (
     <div className="kahuna">
@@ -126,15 +190,20 @@ export function KahunaBoard({
           Scores: <b style={{ color: SEAT_COLOR[seat] }}>you {obs.scores[seat]}</b> ·{' '}
           <b style={{ color: SEAT_COLOR[1 - seat] }}>them {obs.scores[1 - seat]}</b>
         </span>
-        <span>Scoring {obs.scoring_count}/3</span>
-        <span>Pile {obs.pile_count}</span>
-        <span>Opponent: {obs.opponent_hand_count} cards</span>
-        {obs.opponent_hidden_discard_count > 0 && (
-          <span>({obs.opponent_hidden_discard_count} face-down discards)</span>
-        )}
+        <span>Round {round}/3</span>
         {obs.final_turns_remaining !== null && (
           <span className="dim">Final turns: {obs.final_turns_remaining}</span>
         )}
+      </div>
+
+      <div>
+        <h3>Opponent's hand</h3>
+        <div className="kahuna-cards">
+          {Array.from({ length: obs.opponent_hand_count }, (_, i) => (
+            <span key={i} className="card facedown small" />
+          ))}
+          {obs.opponent_hand_count === 0 && <span className="dim">empty</span>}
+        </div>
       </div>
 
       <svg viewBox={VIEWBOX} className="kahuna-svg">
@@ -142,21 +211,39 @@ export function KahunaBoard({
           const [x1, y1] = POS[a]
           const [x2, y2] = POS[b]
           const owner = obs.bridges[pos]
-          const actionable = yourTurn && byBridge.has(pos)
-          const actionableKind = actionable ? (owner === null ? 'place' : 'remove') : null
+          const selected = selBridges.includes(pos)
+          const active = selected || (yourTurn && canAdd(pos))
+          const base =
+            owner === null
+              ? selected
+                ? // Ghost of the bridge you're about to build.
+                  { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.55 }
+                : active
+                  ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.6 }
+                  : { stroke: 'var(--line)', strokeWidth: 2, strokeDasharray: '4 5' }
+              : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.45 : 1 }
           return (
-            <line
+            <g
               key={pos}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={owner === null ? 'var(--line)' : SEAT_COLOR[owner]}
-              strokeWidth={owner === null ? 2 : 5}
-              strokeDasharray={owner === null ? '4 5' : undefined}
-              className={actionableKind ? `bridge actionable-${actionableKind}` : 'bridge'}
-              onClick={() => clickBridge(pos)}
-            />
+              className={selected ? 'bridge active selected' : active ? 'bridge active' : 'bridge'}
+              onClick={active ? () => toggleBridge(pos) : undefined}
+            >
+              <line x1={x1} y1={y1} x2={x2} y2={y2} {...base} />
+              {owner !== null && active && (
+                // Marked (or markable) for demolition.
+                <line
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="var(--danger)"
+                  strokeWidth={selected ? 5 : 10}
+                  strokeDasharray={selected ? '6 4' : undefined}
+                  opacity={selected ? 0.95 : 0.3}
+                />
+              )}
+              {active && <line x1={x1} y1={y1} x2={x2} y2={y2} className="bridge-hit" />}
+            </g>
           )
         })}
         {islands.map((island) => {
@@ -186,84 +273,84 @@ export function KahunaBoard({
         })}
       </svg>
 
-      {chooser !== null && (
-        <div className="kahuna-chooser">
-          {(byBridge.get(chooser) ?? []).map((la) => (
-            <button key={la.action} onClick={() => pick(la)}>
-              {variantLabel(la)}
-            </button>
-          ))}
-          <button onClick={() => setChooser(null)}>Cancel</button>
-        </div>
-      )}
-
-      <div className="kahuna-panel">
+      <div className="kahuna-supply">
         <div>
-          <h3>Your hand</h3>
-          <div className="action-row">
-            {countCards(obs.hand).map(([card, n]) => (
-              <span key={card} className="chip">
-                {card}
-                {n > 1 ? ` ×${n}` : ''}
-              </span>
-            ))}
-            {obs.hand.length === 0 && <span className="dim">empty</span>}
-          </div>
-          {obs.my_hidden_discards.length > 0 && (
-            <div className="dim">Your face-down discards: {obs.my_hidden_discards.join(', ')}</div>
-          )}
-        </div>
-
-        <div>
-          <h3>Draw</h3>
-          <div className="action-row">
+          <h3>Face-up</h3>
+          <div className="kahuna-cards">
             {obs.face_up.map((card, slot) => {
               const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
+              if (card === null) return <span key={slot} className="card empty" />
               return (
-                <button
-                  key={slot}
-                  className="chip-btn"
-                  disabled={!la}
-                  onClick={() => la && pick(la)}
-                >
-                  {card ?? '—'}
+                <button key={slot} className="card" disabled={!la} onClick={() => endTurn(la)}>
+                  {card}
                 </button>
               )
             })}
-            {byKind('draw_blind').map((la) => (
-              <button key={la.action} onClick={() => pick(la)}>
-                Draw blind ({obs.pile_count})
-              </button>
-            ))}
-            {byKind('skip').map((la) => (
-              <button key={la.action} onClick={() => pick(la)}>
+          </div>
+        </div>
+        <div>
+          <h3>Pile ({obs.pile_count})</h3>
+          <div className="kahuna-pile-wrap">
+            <button
+              className="pile"
+              disabled={!drawBlind}
+              onClick={() => endTurn(drawBlind)}
+              aria-label={`draw pile, ${obs.pile_count} cards`}
+            >
+              {obs.pile_count === 0 && <span className="card empty" />}
+              {Array.from({ length: obs.pile_count }, (_, i) => (
+                <span
+                  key={i}
+                  className="card facedown pile-card"
+                  style={{ translate: `${-1.2 * i}px ${-0.8 * i}px` }}
+                />
+              ))}
+            </button>
+            {skip && (
+              <button className="kahuna-skip" onClick={() => endTurn(skip)}>
                 Skip draw
               </button>
-            ))}
+            )}
           </div>
         </div>
+      </div>
 
-        {byKind('discard').length > 0 && (
-          <div>
-            <h3>Hand limit — discard face-down first</h3>
-            <div className="action-row">
-              {byKind('discard').map((la) => (
-                <button key={la.action} onClick={() => pick(la)}>
-                  {la.meta.island as string}
-                </button>
-              ))}
-            </div>
+      <div>
+        <h3>Your hand</h3>
+        <div className="kahuna-cards">
+          {obs.hand.map((card, i) => (
+            <button
+              key={i}
+              className={selCards.includes(i) ? 'card selected' : 'card'}
+              aria-pressed={selCards.includes(i)}
+              onClick={() => toggleCard(i)}
+            >
+              {card}
+            </button>
+          ))}
+          {obs.hand.length === 0 && <span className="dim">empty</span>}
+        </div>
+        {yourTurn && selCards.length > 0 && (
+          <div className="action-row kahuna-confirm">
+            <button className="primary" disabled={!plan || busy} onClick={commit}>
+              {commitLabel}
+            </button>
+            {canDiscard && <button onClick={discard}>Discard face-down…</button>}
+            <button onClick={() => { setSelCards([]); setSelBridges([]) }}>Clear</button>
+            {!plan && (
+              <span className="dim">select lines/bridges that spend every selected card</span>
+            )}
           </div>
         )}
+      </div>
 
-        <div>
-          <h3>Log</h3>
-          <ul className="kahuna-log">
-            {history.slice(-8).map((h, i) => (
-              <li key={history.length - 8 + i}>{historyLine(h, seat)}</li>
-            ))}
-          </ul>
-        </div>
+      <div>
+        <h3>Log</h3>
+        <ul className="kahuna-log">
+          {history.slice(-8).map((h, i) => (
+            <li key={history.length - 8 + i}>{historyLine(h, seat)}</li>
+          ))}
+        </ul>
       </div>
     </div>
   )

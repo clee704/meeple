@@ -134,42 +134,25 @@ input {
   border-radius: 12px;
 }
 
-.bridge {
+.bridge line {
+  pointer-events: none;
+}
+
+.bridge line.bridge-hit {
+  stroke: transparent;
+  stroke-width: 14;
   pointer-events: stroke;
 }
 
-.bridge.actionable-place,
-.bridge.actionable-remove {
+.bridge.active {
   cursor: pointer;
 }
 
-.bridge.actionable-place {
-  stroke: #c2bcae;
-  stroke-width: 5;
-  stroke-dasharray: none;
+.bridge.active:hover {
+  filter: brightness(0.75);
 }
 
-.bridge.actionable-place:hover,
-.bridge.actionable-remove:hover {
-  filter: brightness(0.7);
-}
-
-.kahuna-chooser {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  background: var(--panel);
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 0.6rem;
-}
-
-.kahuna-panel {
-  display: grid;
-  gap: 0.8rem;
-}
-
-.kahuna-panel h3 {
+.kahuna h3 {
   font-size: 0.85rem;
   color: var(--dim);
   margin: 0 0 0.3rem;
@@ -177,13 +160,86 @@ input {
   letter-spacing: 0.04em;
 }
 
-.chip,
-.chip-btn {
-  padding: 0.35rem 0.7rem;
+.kahuna-cards {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  min-height: 82px;
+}
+
+.card {
+  width: 54px;
+  height: 76px;
   border: 1.5px solid var(--ink);
   border-radius: 8px;
   background: var(--panel);
-  font-weight: 600;
+  display: inline-grid;
+  place-items: center;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink);
+  padding: 0;
+}
+
+button.card:not(:disabled) {
+  cursor: pointer;
+}
+
+.card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+  translate: 0 -6px;
+}
+
+.card.facedown {
+  background: repeating-linear-gradient(135deg, #2f6b60, #2f6b60 5px, #3f8173 5px, #3f8173 10px);
+  border-color: #26564d;
+}
+
+.card.small {
+  width: 40px;
+  height: 56px;
+}
+
+.card.empty {
+  border-style: dashed;
+  border-color: var(--line);
+  background: transparent;
+}
+
+.kahuna-supply {
+  display: flex;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.kahuna-pile-wrap {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.pile {
+  position: relative;
+  width: 76px;
+  height: 92px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  padding: 0;
+}
+
+.pile .card {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+}
+
+.kahuna-confirm {
+  margin-top: 0.7rem;
+  align-items: center;
 }
 
 .kahuna-log {

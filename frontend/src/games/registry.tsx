@@ -5,7 +5,9 @@ import { KuhnBoard } from './KuhnBoard'
 
 // The per-game plugin contract: everything a renderer gets is either
 // game-defined SPI output (observation/meta, opaque to the shell) or the
-// generic turn plumbing. A renderer's one output is submitAction(id).
+// generic turn plumbing. A renderer's one output is submitAction(id); it
+// resolves true iff the server accepted the action, so a renderer can chain
+// several actions in one gesture and stop as soon as one is rejected.
 export interface GameRendererProps {
   observation: unknown
   meta: Record<string, unknown>
@@ -14,7 +16,7 @@ export interface GameRendererProps {
   legalActions: LegalAction[]
   history: HistoryEntry[]
   result: Record<string, unknown> | null
-  submitAction: (action: number) => void
+  submitAction: (action: number) => Promise<boolean>
 }
 
 export const renderers: Record<string, ComponentType<GameRendererProps>> = {
