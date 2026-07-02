@@ -6,11 +6,19 @@
   --line: #ddd7cb;
   --accent: #1d6f5c;
   --accent-ink: #ffffff;
-  --p0: #c0392b; /* seat 0 — red */
-  --p1: #d4a017; /* seat 1 — yellow */
+  --p0: #da4d52; /* seat 0 — red */
+  --p0-ink: #ffffff; /* label on a seat-0-colored island */
+  --p1: #f9c700; /* seat 1 — yellow */
+  --p1-ink: var(--ink); /* label on a seat-1-colored island */
   --danger: #9c2f2f;
-  --board: #a6dcef; /* sea around the islands */
-  --island: #35835a; /* unoccupied island */
+  --danger-ink: #ffffff;
+  --board: #5bc1ef; /* sea around the islands */
+  --island: #2ba549; /* unoccupied island */
+  --island-ink: #ffffff; /* label on an unoccupied island */
+  --route: rgba(255, 255, 255, 0.9); /* unbuilt route dashes on the board */
+  --cardback: #2f5d8a; /* face-down card */
+  --cardback-stripe: #3f77ad;
+  --cardback-edge: #26496b;
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);
   background: var(--bg);
@@ -109,7 +117,7 @@ input {
   left: 50%;
   transform: translateX(-50%);
   background: var(--danger);
-  color: #fff;
+  color: var(--danger-ink);
   padding: 0.6rem 1.1rem;
   border-radius: 8px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
@@ -196,8 +204,14 @@ button.card:not(:disabled) {
 }
 
 .card.facedown {
-  background: repeating-linear-gradient(135deg, #2f5d8a, #2f5d8a 5px, #3f77ad 5px, #3f77ad 10px);
-  border-color: #26496b;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--cardback),
+    var(--cardback) 5px,
+    var(--cardback-stripe) 5px,
+    var(--cardback-stripe) 10px
+  );
+  border-color: var(--cardback-edge);
 }
 
 .card.empty {
