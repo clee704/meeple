@@ -331,13 +331,13 @@ export function KahunaBoard({
                   r={26}
                   fill={controller === null ? 'var(--island)' : SEAT_COLOR[controller]}
                   stroke="var(--island-edge)"
-                  strokeWidth={1.0}
+                  strokeWidth={0}
                 />
                 <text
                   x={x}
                   y={y + 4}
                   textAnchor="middle"
-                  fontSize={13}
+                  fontSize={11}
                   fill={controller === null ? 'var(--island-ink)' : SEAT_LABEL[controller]}
                 >
                   {island}
@@ -354,8 +354,10 @@ export function KahunaBoard({
               {obs.face_up.map((card, slot) => {
                 const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
                 if (card === null) return <span key={slot} className="card empty" />
+                // Never disabled: like your hand, supply cards keep their
+                // normal look off-turn and the click is simply a no-op.
                 return (
-                  <button key={slot} className="card" disabled={!la} onClick={() => endTurn(la)}>
+                  <button key={slot} className="card" onClick={() => endTurn(la)}>
                     {card}
                   </button>
                 )
@@ -367,7 +369,6 @@ export function KahunaBoard({
             <div className="kahuna-pile-wrap">
               <button
                 className="pile"
-                disabled={!drawBlind}
                 onClick={() => endTurn(drawBlind)}
                 aria-label={`draw pile, ${obs.pile_count} cards`}
               >
