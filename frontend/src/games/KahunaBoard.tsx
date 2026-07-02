@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HistoryEntry, LegalAction } from '../types'
 import type { GameRendererProps } from './registry'
 import { matchSelection, payOptionsByBridge } from './kahunaSelect'
@@ -47,7 +47,7 @@ const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
 // A pile of `count` cards (card 0 bottommost), top card anchored at the
 // top-left so a shrinking pile pulls in toward it; depth fans lower cards
 // right-down.
-function cardStack(count: number, classFor: (i: number) => string) {
+function cardStack(count: number, classFor: (i: number) => string, labelFor?: (i: number) => string | null) {
   if (count === 0) return <span className="card empty" />
   return Array.from({ length: count }, (_, i) => {
     const depth = count - 1 - i
@@ -56,7 +56,9 @@ function cardStack(count: number, classFor: (i: number) => string) {
         key={i}
         className={classFor(i)}
         style={{ translate: `${1.2 * depth}px ${0.8 * depth}px` }}
-      />
+      >
+        {labelFor?.(i)}
+      </span>
     )
   })
 }
@@ -74,7 +76,7 @@ function historyLine(h: HistoryEntry, seat: number): string {
       return `${who} removed ${a}–${b} (paid ${(m.spend as string[]).join('+')})`
     }
     case 'draw_blind':
-      return `${who} drew from the pile`
+      return `${who} drew from the draw pile`
     case 'take_faceup':
       return `${who} took face-up card ${(m.slot as number) + 1}`
     case 'skip':
@@ -202,8 +204,27 @@ export function KahunaBoard({
   const drawBlind = byKind('draw_blind')[0]
   const skip = byKind('skip')[0]
   const round = Math.min(obs.scoring_count + 1, 3)
-  const hiddenCount = obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
-  const discardCount = obs.discard.length + hiddenCount
+  const discardCount =
+    obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
+
+  // Briefly show the opponent's openly played cards face-up on top of the
+  // discard pile before they flip over, so you can see what they spent.
+  const [revealed, setRevealed] = useState<string[]>([])
+  const seenHistory = useRef(history.length)
+  useEffect(() => {
+    const fresh = history.slice(seenHistory.current)
+    seenHistory.current = history.length
+    const cards = fresh
+      .filter((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove'))
+      .flatMap((h) => h.meta.spend as string[])
+    if (cards.length === 0) return
+    setRevealed((prev) => [...prev, ...cards])
+    // Batches expire FIFO, so dropping from the front removes exactly this one.
+    setTimeout(() => setRevealed((prev) => prev.slice(cards.length)), 3000)
+  }, [history, seat])
+  // Clamped: a reshuffle can empty the discard pile mid-reveal.
+  const revealCount = Math.min(revealed.length, discardCount)
+  const flipAt = discardCount - revealCount
 
   return (
     <div className="kahuna">
@@ -224,7 +245,7 @@ export function KahunaBoard({
           {Array.from({ length: obs.opponent_hand_count }, (_, i) => (
             <span key={i} className="card facedown" />
           ))}
-          {obs.opponent_hand_count === 0 && <span className="dim">empty</span>}
+          {obs.opponent_hand_count === 0 && <span className="card empty"></span>}
         </div>
       </div>
 
@@ -312,7 +333,7 @@ export function KahunaBoard({
             </div>
           </div>
           <div>
-            <h3>Pile ({obs.pile_count})</h3>
+            <h3>Draw pile ({obs.pile_count})</h3>
             <div className="kahuna-pile-wrap">
               <button
                 className="pile"
@@ -330,11 +351,13 @@ export function KahunaBoard({
             </div>
           </div>
           <div>
-            <h3>Discard ({discardCount})</h3>
-            {/* One pile, like the table: face-down hand-limit discards
-                slide under it, openly spent cards land face-up on top. */}
+            <h3>Discard pile ({discardCount})</h3>
             <div className="pile">
-              {cardStack(discardCount, (i) => (i < hiddenCount ? 'card facedown' : 'card'))}
+              {cardStack(
+                discardCount,
+                (i) => (i < flipAt ? 'card facedown' : 'card'),
+                (i) => (i < flipAt ? null : revealed[revealed.length - revealCount + (i - flipAt)]),
+              )}
             </div>
           </div>
         </div>
@@ -353,14 +376,14 @@ export function KahunaBoard({
               {card}
             </button>
           ))}
-          {obs.hand.length === 0 && <span className="dim">empty</span>}
+          {obs.hand.length === 0 && <span className="card empty"></span>}
         </div>
         {yourTurn && selCards.length > 0 && (
           <div className="action-row kahuna-confirm">
             <button className="primary" disabled={!plan || busy} onClick={commit}>
               {commitLabel}
             </button>
-            {canDiscard && <button onClick={discard}>Discard face-down…</button>}
+            {canDiscard && <button onClick={discard}>Discard</button>}
             <button onClick={() => { setSelCards([]); setSelBridges([]) }}>Clear</button>
             {!plan && (
               <span className="dim">select lines/bridges that spend every selected card</span>
