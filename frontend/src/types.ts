@@ -27,6 +27,8 @@ export interface Envelope {
   history: HistoryEntry[]
   result: Record<string, unknown> | null
   forfeited_by: number | null
+  turn_count: number
+  elapsed_seconds: number
   meta?: Record<string, unknown>
 }
 

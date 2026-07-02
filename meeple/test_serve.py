@@ -78,6 +78,8 @@ def test_create_then_waiting_state(client):
     assert env["to_move"] is None
     assert env["legal_actions"] == []
     assert "meta" in env  # initial fetch bootstraps the renderer
+    assert env["turn_count"] == 1
+    assert env["elapsed_seconds"] == 0.0  # the clock doesn't run while waiting
 
 
 def test_join_assigns_seat_1_then_match_is_full(client):
@@ -157,6 +159,25 @@ def test_leave_rejects_bad_token(client):
     assert resp.status_code == 403
 
 
+def test_turn_count_advances_when_the_turn_passes(client):
+    # Seed 1: seat 0 moves first holding BARI, and BARI-FAAA (bridge_pos 6)
+    # is open — action 6 is place(6, using card a=BARI); 135 is draw-blind.
+    created = _create(client, game_id="kahuna", seed=1)
+    match_id, token0 = created["match_id"], created["token"]
+    token1 = _join(client, created["join_code"])["token"]
+
+    env = _state(client, match_id, token0)
+    assert env["turn_count"] == 1
+    assert env["elapsed_seconds"] >= 0.0
+
+    # Playing a card keeps the turn; drawing passes it.
+    env = _act(client, match_id, token0, 6).json()
+    assert env["turn_count"] == 1
+    env = _act(client, match_id, token0, 135).json()
+    assert env["turn_count"] == 2
+    assert _state(client, match_id, token1)["turn_count"] == 2
+
+
 def test_kuhn_playthrough_and_polling(client):
     created = _create(client)
     match_id, token0 = created["match_id"], created["token"]
@@ -172,6 +193,7 @@ def test_kuhn_playthrough_and_polling(client):
     assert final0["result"]["cards"] is not None
     assert final0["result"] == final1["result"]
     assert [h["meta"]["kind"] for h in final0["history"]] == ["pass", "pass"]
+    assert final0["turn_count"] == 2  # one action per Kuhn turn; terminal doesn't add one
     # A poll with the old version now returns the full envelope again.
     assert _state(client, match_id, token0, since=env["version"])["status"] == "finished"
 
@@ -206,6 +228,8 @@ def test_same_seed_and_actions_give_identical_envelopes(client):
             for c, toks in zip(ids, tokens, strict=True)
         ]
         for seat in (0, 1):
+            for env in (envs[0][seat], envs[1][seat]):
+                env.pop("elapsed_seconds")  # wall-clock, inherently run-specific
             assert envs[0][seat] == envs[1][seat]
         if envs[0][0]["status"] != "in_progress":
             break

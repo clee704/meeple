@@ -5,17 +5,32 @@ import type { Envelope, Session } from './types'
 
 const POLL_MS = 1000
 
+function formatClock(seconds: number): string {
+  const t = Math.max(0, Math.floor(seconds))
+  const h = Math.floor(t / 3600)
+  const mm = String(Math.floor((t % 3600) / 60)).padStart(2, '0')
+  const ss = String(t % 60).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
 function Banner({
   env,
+  clock,
   session,
   onExit,
   onQuit,
 }: {
   env: Envelope
+  clock: string
   session: Session
   onExit: () => void
   onQuit: () => void
 }) {
+  const turnClock = (
+    <span className="dim">
+      Turn {env.turn_count} · {clock}
+    </span>
+  )
   if (env.status === 'finished') {
     const verdict =
       env.forfeited_by !== null
@@ -29,6 +44,7 @@ function Banner({
     return (
       <div className="banner">
         <strong>{verdict}</strong>
+        {turnClock}
         <button onClick={onExit}>Back to lobby</button>
       </div>
     )
@@ -50,6 +66,7 @@ function Banner({
   return (
     <div className="banner">
       {env.your_turn ? 'Your turn.' : "Opponent's turn…"}
+      {turnClock}
       <button onClick={onQuit}>Quit</button>
     </div>
   )
@@ -67,12 +84,24 @@ export function MatchScreen({
   const [env, setEnv] = useState<Envelope | null>(null)
   const [meta, setMeta] = useState<Record<string, unknown>>({})
   const envRef = useRef<Envelope | null>(null)
+  const absorbedAtRef = useRef(Date.now())
 
   const absorb = useCallback((e: Envelope) => {
     envRef.current = e
+    absorbedAtRef.current = Date.now()
     setEnv(e)
     if (e.meta) setMeta(e.meta)
   }, [])
+
+  // The server's elapsed_seconds only refreshes when the state changes, so
+  // tick locally once a second to keep the clock moving between polls.
+  const [, setTick] = useState(0)
+  const running = env?.status === 'in_progress'
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => setTick((t) => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [running])
 
   useEffect(() => {
     let stopped = false
@@ -125,10 +154,12 @@ export function MatchScreen({
 
   if (!env) return <div className="banner">Loading…</div>
 
+  const elapsed =
+    env.elapsed_seconds + (running ? (Date.now() - absorbedAtRef.current) / 1000 : 0)
   const Board = renderers[env.game_id]
   return (
     <div className="match">
-      <Banner env={env} session={session} onExit={onExit} onQuit={quit} />
+      <Banner env={env} clock={formatClock(elapsed)} session={session} onExit={onExit} onQuit={quit} />
       {Board ? (
         <Board
           observation={env.observation}

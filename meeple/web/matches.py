@@ -5,6 +5,7 @@ behind the same `MatchStore` methods."""
 
 import random
 import secrets
+import time
 from dataclasses import dataclass, field
 
 from meeple.framework import registry
@@ -56,6 +57,11 @@ class Match:
     histories: list[list[dict]]
     version: int = 1
     forfeited_by: int | None = None
+    # Wall-clock/turn bookkeeping for the UI. A "turn" is a stretch of
+    # actions by one player: it advances when `to_move` changes hands.
+    turn_count: int = 1
+    started_at: float | None = None  # monotonic; set when the last seat fills
+    finished_at: float | None = None
 
     @property
     def status(self) -> str:
@@ -75,6 +81,7 @@ class Match:
         if self.status == "finished":
             raise IllegalActionError("match is already finished")
         self.forfeited_by = seat
+        self.finished_at = time.monotonic()
         self.version += 1
 
     def apply(self, seat: int, action: int) -> None:
@@ -90,6 +97,10 @@ class Match:
             entry = {"actor": seat, "meta": self.view.describe_action(action, viewer, seat)}
             self.histories[viewer].append(entry)
         self.state = resolve_chance(self.state, self.rng)
+        if self.state.is_terminal():
+            self.finished_at = time.monotonic()
+        elif self.state.current_player() != seat:
+            self.turn_count += 1
         self.version += 1
 
     def envelope(self, seat: int, include_meta: bool) -> dict:
@@ -111,10 +122,18 @@ class Match:
             "history": list(self.histories[seat]),
             "result": self._result(),
             "forfeited_by": self.forfeited_by,
+            "turn_count": self.turn_count,
+            "elapsed_seconds": self._elapsed_seconds(),
         }
         if include_meta:
             env["meta"] = self.view.game_meta()
         return env
+
+    def _elapsed_seconds(self) -> float:
+        if self.started_at is None:
+            return 0.0
+        end = self.finished_at if self.finished_at is not None else time.monotonic()
+        return end - self.started_at
 
     def _result(self) -> dict | None:
         if self.forfeited_by is not None:
@@ -165,6 +184,8 @@ class MatchStore:
         seat = match.tokens.index(None)
         token = secrets.token_urlsafe(16)
         match.tokens[seat] = token
+        if None not in match.tokens:
+            match.started_at = time.monotonic()  # the clock runs on play, not waiting
         match.version += 1  # wakes the creator's poll: status flips to in_progress
         return match, seat, token
 
