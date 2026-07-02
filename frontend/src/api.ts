@@ -64,6 +64,10 @@ export function postAction(session: Session, action: number): Promise<Envelope> 
   return post(`/api/matches/${session.matchId}/actions`, { action }, session.token)
 }
 
+export function leaveMatch(session: Session): Promise<Envelope> {
+  return post(`/api/matches/${session.matchId}/leave`, undefined, session.token)
+}
+
 // The session survives a refresh (and an accidental tab close) so a LAN
 // match isn't orphaned by one, but only one match at a time per browser.
 const SESSION_KEY = 'meeple.session'

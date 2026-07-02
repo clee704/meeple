@@ -44,6 +44,10 @@ def _act(client, match_id, token, action):
     )
 
 
+def _leave(client, match_id, token):
+    return client.post(f"/api/matches/{match_id}/leave", headers={"X-Seat-Token": token})
+
+
 def _play_to_finish(client, match_id, tokens, rng=None, max_steps=10_000):
     """Drive a 2-seat match to the end over HTTP; returns the final envelopes."""
     envs = [_state(client, match_id, t) for t in tokens]
@@ -114,6 +118,43 @@ def test_out_of_turn_and_illegal_actions_are_409(client):
     resp = _act(client, match_id, tokens[mover], 999_999)
     assert resp.status_code == 409
     assert "not legal" in resp.json()["detail"]
+
+
+def test_leave_forfeits_an_in_progress_match(client):
+    created = _create(client)
+    match_id, token0 = created["match_id"], created["token"]
+    token1 = _join(client, created["join_code"])["token"]
+
+    resp = _leave(client, match_id, token0)
+    assert resp.status_code == 200
+    quitter = resp.json()
+    assert quitter["status"] == "finished"
+    assert quitter["forfeited_by"] == 0
+    assert quitter["result"] == {"scores": [-1.0, 1.0], "winner": 1}
+
+    # The remaining player sees the same outcome on their next poll.
+    opponent = _state(client, match_id, token1)
+    assert opponent["status"] == "finished"
+    assert opponent["forfeited_by"] == 0
+    assert opponent["result"] == {"scores": [-1.0, 1.0], "winner": 1}
+
+    # No further actions or a second leave are accepted once finished.
+    assert _act(client, match_id, token1, 0).status_code == 409
+    assert _leave(client, match_id, token1).status_code == 409
+
+
+def test_leave_while_waiting_closes_the_match_to_new_joiners(client):
+    created = _create(client)
+    match_id, token0 = created["match_id"], created["token"]
+    assert _leave(client, match_id, token0).status_code == 200
+    resp = client.post("/api/matches/join", json={"join_code": created["join_code"]})
+    assert resp.status_code == 404
+
+
+def test_leave_rejects_bad_token(client):
+    created = _create(client)
+    resp = _leave(client, created["match_id"], "forged")
+    assert resp.status_code == 403
 
 
 def test_kuhn_playthrough_and_polling(client):

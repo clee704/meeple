@@ -1,25 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, getState, postAction } from './api'
+import { ApiError, getState, leaveMatch, postAction } from './api'
 import { renderers } from './games/registry'
 import type { Envelope, Session } from './types'
 
 const POLL_MS = 1000
 
-function Banner({ env, session, onExit }: { env: Envelope; session: Session; onExit: () => void }) {
-  if (env.status === 'waiting') {
-    const link = `${location.origin}${location.pathname}#/join/${session.joinCode}`
-    return (
-      <div className="banner">
-        Waiting for an opponent — join code <strong>{session.joinCode}</strong>
-        <div className="dim">
-          Same network: <a href={link}>{link}</a>
-        </div>
-      </div>
-    )
-  }
+function Banner({
+  env,
+  session,
+  onExit,
+  onQuit,
+}: {
+  env: Envelope
+  session: Session
+  onExit: () => void
+  onQuit: () => void
+}) {
   if (env.status === 'finished') {
-    const winner = env.result?.winner as number | null
-    const verdict = winner === null ? 'Draw.' : winner === env.seat ? 'You win!' : 'You lose.'
+    const verdict =
+      env.forfeited_by !== null
+        ? env.forfeited_by === env.seat
+          ? 'You quit.'
+          : 'Opponent quit — you win!'
+        : (() => {
+            const winner = env.result?.winner as number | null
+            return winner === null ? 'Draw.' : winner === env.seat ? 'You win!' : 'You lose.'
+          })()
     return (
       <div className="banner">
         <strong>{verdict}</strong>
@@ -27,7 +33,26 @@ function Banner({ env, session, onExit }: { env: Envelope; session: Session; onE
       </div>
     )
   }
-  return <div className="banner">{env.your_turn ? 'Your turn.' : "Opponent's turn…"}</div>
+  if (env.status === 'waiting') {
+    const link = `${location.origin}${location.pathname}#/join/${session.joinCode}`
+    return (
+      <div className="banner">
+        <div>
+          Waiting for an opponent — join code <strong>{session.joinCode}</strong>
+          <div className="dim">
+            Same network: <a href={link}>{link}</a>
+          </div>
+        </div>
+        <button onClick={onQuit}>Quit</button>
+      </div>
+    )
+  }
+  return (
+    <div className="banner">
+      {env.your_turn ? 'Your turn.' : "Opponent's turn…"}
+      <button onClick={onQuit}>Quit</button>
+    </div>
+  )
 }
 
 export function MatchScreen({
@@ -81,12 +106,27 @@ export function MatchScreen({
     }
   }
 
+  const quit = async () => {
+    const prompt =
+      env?.status === 'in_progress' ? 'Quit this match? Your opponent wins by forfeit.' : 'Quit this match?'
+    if (!confirm(prompt)) return
+    try {
+      await leaveMatch(session)
+    } catch (err) {
+      // Leaving anyway is still the right outcome even if the request failed
+      // (e.g. the match was already gone) -- don't strand the player here.
+      if (err instanceof ApiError) onError(err.message)
+      else onError(String(err))
+    }
+    onExit()
+  }
+
   if (!env) return <div className="banner">Loading…</div>
 
   const Board = renderers[env.game_id]
   return (
     <div className="match">
-      <Banner env={env} session={session} onExit={onExit} />
+      <Banner env={env} session={session} onExit={onExit} onQuit={quit} />
       {Board ? (
         <Board
           observation={env.observation}

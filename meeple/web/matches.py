@@ -55,9 +55,12 @@ class Match:
     # append time, so a viewer's log never holds what they may not see.
     histories: list[list[dict]]
     version: int = 1
+    forfeited_by: int | None = None
 
     @property
     def status(self) -> str:
+        if self.forfeited_by is not None:
+            return "finished"
         if None in self.tokens:
             return "waiting"
         return "finished" if self.state.is_terminal() else "in_progress"
@@ -67,6 +70,12 @@ class Match:
             if seat_token is not None and secrets.compare_digest(seat_token, token):
                 return seat
         raise BadTokenError("bad seat token")
+
+    def forfeit(self, seat: int) -> None:
+        if self.status == "finished":
+            raise IllegalActionError("match is already finished")
+        self.forfeited_by = seat
+        self.version += 1
 
     def apply(self, seat: int, action: int) -> None:
         if self.status != "in_progress":
@@ -100,11 +109,22 @@ class Match:
                 for a in (self.state.legal_actions() if your_turn else [])
             ],
             "history": list(self.histories[seat]),
-            "result": self.view.result(self.state) if self.state.is_terminal() else None,
+            "result": self._result(),
+            "forfeited_by": self.forfeited_by,
         }
         if include_meta:
             env["meta"] = self.view.game_meta()
         return env
+
+    def _result(self) -> dict | None:
+        if self.forfeited_by is not None:
+            # A forfeit isn't a game-engine outcome, so it's scored here
+            # rather than via the view: the forfeiting seat loses outright.
+            num_players = len(self.tokens)
+            scores = [-1.0 if p == self.forfeited_by else 1.0 for p in range(num_players)]
+            winner = None if num_players != 2 else 1 - self.forfeited_by
+            return {"scores": scores, "winner": winner}
+        return self.view.result(self.state) if self.state.is_terminal() else None
 
 
 @dataclass
@@ -138,6 +158,8 @@ class MatchStore:
         if match_id is None:
             raise UnknownMatchError(f"no match with join code {join_code!r}")
         match = self._matches[match_id]
+        if match.forfeited_by is not None:
+            raise UnknownMatchError(f"match with join code {join_code!r} is no longer available")
         if None not in match.tokens:
             raise MatchFullError("all seats are taken")
         seat = match.tokens.index(None)

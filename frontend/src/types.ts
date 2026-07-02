@@ -26,6 +26,7 @@ export interface Envelope {
   legal_actions: LegalAction[]
   history: HistoryEntry[]
   result: Record<string, unknown> | null
+  forfeited_by: number | null
   meta?: Record<string, unknown>
 }
 
