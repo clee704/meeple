@@ -12,14 +12,19 @@ dependencies = [
 [project.optional-dependencies]
 # Used only to cross-check native engines in tests, never a game backend — install on demand.
 openspiel = ["open-spiel>=1.5"]
-web = ["fastapi>=0.110", "uvicorn>=0.30"]
+web = [
+    "fastapi>=0.110",
+    "pydantic>=2",
+    "uvicorn>=0.30",
+]
 
 [project.scripts]
-meeple = "meeple.cli:main"
+meeple = "meeple.serve:main"
 
 [dependency-groups]
 dev = [
     "deptry>=0.20",
+    "httpx>=0.27",
     "import-linter>=2.0",
     "open-spiel>=1.5",
     "pre-commit>=3.7",
@@ -59,8 +64,6 @@ min_confidence = 80
 known_first_party = ["meeple"]
 
 [tool.deptry.per_rule_ignores]
-# fastapi/uvicorn are optional extras for the (not yet built) web backend.
-DEP002 = ["fastapi", "uvicorn"]
 # pytest/open-spiel are dev-only but imported from co-located test_*.py files,
 # which deptry doesn't auto-detect as tests outside a tests/ directory.
 DEP004 = ["pytest", "open-spiel"]

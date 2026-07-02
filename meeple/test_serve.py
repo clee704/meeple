@@ -1,0 +1,180 @@
+"""End-to-end tests of the web backend over HTTP. This module sits at the
+package top level (like `serve.py` itself) because it deliberately spans the
+seam: it drives the generic `meeple.web` app with the real registered games."""
+
+import random
+
+import pytest
+from fastapi.testclient import TestClient
+
+import meeple.games  # noqa: F401 — side effect: registers games + views
+from meeple.web.app import create_app
+
+
+@pytest.fixture
+def client():
+    return TestClient(create_app())
+
+
+def _create(client, game_id="kuhn", seed=7):
+    resp = client.post("/api/matches", json={"game_id": game_id, "seed": seed})
+    assert resp.status_code == 201
+    return resp.json()
+
+
+def _join(client, join_code):
+    resp = client.post("/api/matches/join", json={"join_code": join_code})
+    assert resp.status_code == 200
+    return resp.json()
+
+
+def _state(client, match_id, token, **params):
+    resp = client.get(
+        f"/api/matches/{match_id}/state", params=params, headers={"X-Seat-Token": token}
+    )
+    assert resp.status_code == 200
+    return resp.json()
+
+
+def _act(client, match_id, token, action):
+    return client.post(
+        f"/api/matches/{match_id}/actions",
+        json={"action": action},
+        headers={"X-Seat-Token": token},
+    )
+
+
+def _play_to_finish(client, match_id, tokens, rng=None, max_steps=10_000):
+    """Drive a 2-seat match to the end over HTTP; returns the final envelopes."""
+    envs = [_state(client, match_id, t) for t in tokens]
+    steps = 0
+    while any(e["status"] == "in_progress" for e in envs):
+        mover = next(s for s, e in enumerate(envs) if e["your_turn"])
+        legal = [la["action"] for la in envs[mover]["legal_actions"]]
+        choice = rng.choice(legal) if rng else legal[0]
+        resp = _act(client, match_id, tokens[mover], choice)
+        assert resp.status_code == 200
+        envs = [_state(client, match_id, t) for t in tokens]
+        steps += 1
+        assert steps < max_steps, "match did not terminate"
+    return envs
+
+
+def test_lists_games_with_views(client):
+    games = {g["game_id"]: g for g in client.get("/api/games").json()}
+    assert set(games) == {"kuhn", "kahuna"}
+    assert games["kahuna"]["num_players"] == 2
+
+
+def test_create_then_waiting_state(client):
+    created = _create(client)
+    env = _state(client, created["match_id"], created["token"])
+    assert env["status"] == "waiting"
+    assert env["your_turn"] is False
+    assert env["to_move"] is None
+    assert env["legal_actions"] == []
+    assert "meta" in env  # initial fetch bootstraps the renderer
+
+
+def test_join_assigns_seat_1_then_match_is_full(client):
+    created = _create(client)
+    joined = _join(client, created["join_code"])
+    assert joined["seat"] == 1
+    assert joined["match_id"] == created["match_id"]
+    assert (
+        client.post("/api/matches/join", json={"join_code": created["join_code"]}).status_code
+        == 409
+    )
+    assert client.post("/api/matches/join", json={"join_code": "XXXXX"}).status_code == 404
+
+
+def test_auth_rejections(client):
+    created = _create(client)
+    match_id = created["match_id"]
+    resp = client.get(f"/api/matches/{match_id}/state", headers={"X-Seat-Token": "forged"})
+    assert resp.status_code == 403
+    resp = client.get(f"/api/matches/{match_id}/state")  # missing header
+    assert resp.status_code == 422
+    resp = client.get("/api/matches/nope/state", headers={"X-Seat-Token": "t"})
+    assert resp.status_code == 404
+
+
+def test_out_of_turn_and_illegal_actions_are_409(client):
+    created = _create(client)
+    match_id, token0 = created["match_id"], created["token"]
+    # Match still waiting: no action is accepted, even from the creator.
+    assert _act(client, match_id, token0, 0).status_code == 409
+
+    token1 = _join(client, created["join_code"])["token"]
+    envs = [_state(client, match_id, t) for t in (token0, token1)]
+    mover = next(s for s, e in enumerate(envs) if e["your_turn"])
+    waiter = 1 - mover
+    tokens = (token0, token1)
+    assert _act(client, match_id, tokens[waiter], 0).status_code == 409
+    resp = _act(client, match_id, tokens[mover], 999_999)
+    assert resp.status_code == 409
+    assert "not legal" in resp.json()["detail"]
+
+
+def test_kuhn_playthrough_and_polling(client):
+    created = _create(client)
+    match_id, token0 = created["match_id"], created["token"]
+    token1 = _join(client, created["join_code"])["token"]
+
+    env = _state(client, match_id, token0)
+    unchanged = _state(client, match_id, token0, since=env["version"])
+    assert unchanged == {"changed": False, "version": env["version"]}
+
+    final0, final1 = _play_to_finish(client, match_id, (token0, token1))
+    # First-legal-action play is pass/pass: a showdown.
+    assert final0["status"] == final1["status"] == "finished"
+    assert final0["result"]["cards"] is not None
+    assert final0["result"] == final1["result"]
+    assert [h["meta"]["kind"] for h in final0["history"]] == ["pass", "pass"]
+    # A poll with the old version now returns the full envelope again.
+    assert _state(client, match_id, token0, since=env["version"])["status"] == "finished"
+
+
+def test_kahuna_playthrough_hides_opponent_privates(client):
+    created = _create(client, game_id="kahuna", seed=99)
+    match_id, token0 = created["match_id"], created["token"]
+    token1 = _join(client, created["join_code"])["token"]
+
+    env = _state(client, match_id, token0)
+    assert set(env["meta"]) == {"islands", "bridges", "majority"}
+
+    rng = random.Random(3)
+    finals = _play_to_finish(client, match_id, (token0, token1), rng=rng)
+    for env in finals:
+        obs = env["observation"]
+        assert isinstance(obs["opponent_hand_count"], int)
+        assert "opponent_hand" not in obs  # the other hand is never serialized
+        assert env["result"]["winner"] in (0, 1, None)
+        assert len(env["result"]["points"]) == 2
+
+
+def test_same_seed_and_actions_give_identical_envelopes(client):
+    ids = [_create(client, game_id="kahuna", seed=42) for _ in range(2)]
+    tokens = []
+    for created in ids:
+        tokens.append((created["token"], _join(client, created["join_code"])["token"]))
+
+    for _ in range(30):
+        envs = [
+            [_state(client, c["match_id"], t) for t in toks]
+            for c, toks in zip(ids, tokens, strict=True)
+        ]
+        for seat in (0, 1):
+            assert envs[0][seat] == envs[1][seat]
+        if envs[0][0]["status"] != "in_progress":
+            break
+        mover = next(s for s, e in enumerate(envs[0]) if e["your_turn"])
+        action = min(la["action"] for la in envs[0][mover]["legal_actions"])
+        for c, toks in zip(ids, tokens, strict=True):
+            assert _act(client, c["match_id"], toks[mover], action).status_code == 200
+
+
+def test_serve_module_exposes_the_wired_app():
+    import meeple.serve
+
+    assert meeple.serve.app.title == "MeepleMind"
