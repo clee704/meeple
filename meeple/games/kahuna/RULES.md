@@ -85,9 +85,27 @@ are each one atomic action, even though `remove` costs 2 cards at once:
     later turn.
   - **Skip** — end your turn without drawing at all. Only legal if your
     opponent did **not** also skip on their immediately preceding turn — two
-    skips can't happen back-to-back.
+    skips can't happen back-to-back (sources 1 & 2: "You may abstain from
+    drawing a card, unless your opponent has abstained from drawing a card
+    on his turn immediately before"). Exception: when there's truly nothing
+    left to draw at all, skip is always legal — an engine-level necessity
+    (otherwise nobody could legally end a turn once the deck is exhausted
+    for good in the final phase), settled in issue #14.
 
-Hand limit is 5.
+Hand limit is 5. If your hand is already at the limit when you'd otherwise
+draw, drawing isn't blocked — instead, discard **one or more** cards
+face-down under the discard pile (without revealing which ones), then draw
+as normal (sources 1 & 2: "If your hand contains five island cards and you
+cannot or do not want to play any island card(s), you must place one or
+more of your cards face down under the discard pile in order to draw a new
+card"). The face-down discards exist only as the prelude to that draw:
+they're only allowed while there's actually something to draw, and once
+you've started discarding you must end the turn by drawing — you can't
+discard and then skip or go back to playing cards. Discarding more than
+the single card needed is rarely wise but is a real tactic: it pads the
+next reshuffled pile (delaying the next scoring), sheds cards you can't
+legally play, and hides cards the opponent has seen you take. (Engine-level
+details settled in issue #14.)
 
 ```mermaid
 flowchart TD
@@ -170,10 +188,16 @@ tokens per player, in total. Running out limits what you can still play.
 
 - **Public**: the whole board (every bridge and who owns it), both players'
   placed tokens, the scores, which round it is, remaining bridge/token
-  supplies, the 3 face-up cards, and whether the previous turn ended in a
-  skip (needed to know if skipping is currently legal).
-- **Hidden**: what's in each player's hand, and the order of the face-down
-  pile.
+  supplies, the 3 face-up cards, whether the previous turn ended in a skip
+  (needed to know if skipping is currently legal), and *how many* cards
+  each player has discarded face-down for the hand limit (but not which
+  ones).
+- **Hidden**: what's in each player's hand, the order of the face-down
+  pile, and the specific identity of any card discarded face-down for the
+  hand limit (as opposed to a card spent on `place`/`remove`, which is
+  openly played and so stays visible). Hidden from the *opponent* only —
+  you always still know which cards you discarded yourself, and an
+  engine's information states must preserve that (perfect recall).
 - **Random events**: drawing blind from the face-down pile — whether as
   your own draw, or as the automatic refill after someone takes a face-up
   card. Taking a specific face-up card is a visible, deliberate choice, not
@@ -214,18 +238,33 @@ num_players           = 2
 perfect_information   = False
 has_chance            = True
 zero_sum              = True
-num_distinct_actions  = 2 * 27 + 5 = 59   # place + remove per line (P=27),
-                                          # + draw-blind + 3 face-up picks + skip
+num_distinct_actions  = 5 * 27 + 5 + 12 = 152   # see Action encoding below (P=27)
 ```
 
 ## Action encoding
 
+Which specific card(s) a `place`/`remove` spends is a real choice, not an
+implementation detail — 2 cards of the same island vs. 1 of each leaves a
+different hand and a different discard pile, which matters strategically.
+So each is split by exactly which card(s) it spends, using `a`/`b` for a
+line's two endpoint islands (`a` alphabetically first, per the `bridge_pos`
+table below):
+
 `P = 27`. Stable integer scheme:
-- `0 .. 26` → `place(bridge_pos = i)`
-- `27 .. 53` → `remove(bridge_pos = i - 27)`
-- `54` → end turn, draw blind from the face-down pile
-- `55 .. 57` → end turn, take face-up slot `j` (`j` in 0..2)
-- `58` → end turn, skip the draw
+- `0 .. 26` → `place(bridge_pos = i, using card a)`
+- `27 .. 53` → `place(bridge_pos = i - 27, using card b)`
+- `54 .. 80` → `remove(bridge_pos = i - 54, using 2 cards of a)`
+- `81 .. 107` → `remove(bridge_pos = i - 81, using 2 cards of b)`
+- `108 .. 134` → `remove(bridge_pos = i - 108, using 1 card of a + 1 of b)`
+- `135` → end turn, draw blind from the face-down pile
+- `136 .. 138` → end turn, take face-up slot `j` (`j` in 0..2)
+- `139` → end turn, skip the draw
+- `140 .. 151` → discard one card face-down, naming the island at index
+  `i - 140` in the (alphabetically sorted) island list — the hand-limit
+  action described in Turn structure, legal while your hand is at the
+  limit (or you've already discarded this turn — "one or more") and
+  something is left to draw; once you've started discarding, only further
+  discards and the draw actions are legal until the turn ends
 
 (Exactly how face-up slots are indexed as they get refilled is an
 implementation detail to pin down when the engine is built, not a rules
@@ -247,20 +286,29 @@ island names:
 | 8 | COCO-GOLA | 17 | FAAA-JOJO | 26 | KAHU-LALE |
 
 `legal_actions()` filters these down by: the line is free and you hold a
-card naming one of its endpoint islands (`place`); your opponent owns that
-bridge and you hold either 2 cards naming one of its endpoint islands, or 1
-card naming each endpoint island (`remove`); draw-blind and each currently-
-filled face-up slot are always legal; skip is legal only if the opponent's
-immediately preceding turn wasn't itself a skip.
+card naming the specific endpoint island that variant spends (`place`);
+your opponent owns that bridge and you hold the specific card(s) that
+variant spends — 2 of one endpoint, or 1 of each (`remove`); skip is legal
+only if the opponent's immediately preceding turn wasn't itself a skip
+(unless there's genuinely nothing left to draw, in which case skip is
+always legal). Draw-blind is legal only while the face-down pile is
+nonempty; each currently-filled face-up slot is legal. If your hand is at
+the limit, draw-blind and take-faceup are illegal and the face-down
+discard actions are offered instead (only while a draw is available);
+after discarding, only further face-down discards and the draw actions
+are legal until the turn ends.
 
 ## Information-state tensor (for Deep CFR)
 
 Per-bridge owner (3 possibilities × P positions) · per-island control,
 degree, and each player's bridge count there · your hand, counted per
 island (12 numbers) · the 3 public face-up cards · cards seen/discarded so
-far this round · bridges/tokens remaining · which round it is · scores ·
-whether you've already played a card this turn · whether the opponent
-skipped their last turn (so you know if skipping is legal for you).
+far this round (your own face-down discards by identity, the opponent's
+only by count — see Chance & hidden information) · bridges/tokens
+remaining · which round it is · scores · whether you've already played a
+card this turn · whether your hand-limit discard has just committed you to
+drawing · whether the opponent skipped their last turn (so you know if
+skipping is legal for you).
 
 ## Worked example
 
@@ -276,10 +324,11 @@ Board state before the move:
 - **HUNA**'s 5 lines: `ALOA-HUNA`(2) and `ELAI-HUNA`(13) and `HUNA-IFFI`(20)
   are player 1's; `DUDA-HUNA`(11) and `HUNA-LALE`(21) are free. Player 1
   controls HUNA with exactly 3 of 5 (majority).
-- Player 0 holds a card naming ELAI (or IFFI) in hand.
+- Player 0 holds an ELAI card in hand.
 
-At this position, `place(bridge_pos=14)` (`ELAI-IFFI`) is legal for player 0
-— the line is free and they hold a card naming one of its endpoints.
+At this position, `place(bridge_pos=14, using card ELAI)` is legal for
+player 0 — the `ELAI-IFFI` line is free and they hold a card naming its
+`a` endpoint (ELAI).
 
 Playing it:
 1. Player 0's count on ELAI goes from 3 to 4 — a new strict majority. Player
