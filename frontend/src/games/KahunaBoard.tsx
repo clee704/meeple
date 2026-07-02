@@ -43,6 +43,8 @@ const POS: Record<string, [number, number]> = {
 }
 const VIEWBOX = '174 94 442 357'
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
+// Island label color per fill: white on red/green, ink on yellow.
+const SEAT_LABEL = ['#fff', 'var(--ink)']
 
 // A pile of `count` cards (card 0 bottommost), top card anchored at the
 // top-left so a shrinking pile pulls in toward it; depth fans lower cards
@@ -282,7 +284,7 @@ export function KahunaBoard({
                     { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.55 }
                   : active
                     ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.6 }
-                    : { stroke: 'var(--line)', strokeWidth: 2, strokeDasharray: '4 5' }
+                    : { stroke: 'rgba(255, 255, 255, 0.9)', strokeWidth: 2, strokeDasharray: '4 5' }
                 : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.45 : 1 }
             return (
               <g
@@ -317,7 +319,7 @@ export function KahunaBoard({
                   cx={x}
                   cy={y}
                   r={26}
-                  fill={controller === null ? 'var(--panel)' : SEAT_COLOR[controller]}
+                  fill={controller === null ? 'var(--island)' : SEAT_COLOR[controller]}
                   stroke="var(--ink)"
                   strokeWidth={1.5}
                 />
@@ -326,7 +328,7 @@ export function KahunaBoard({
                   y={y + 4}
                   textAnchor="middle"
                   fontSize={13}
-                  fill={controller === null ? 'var(--ink)' : '#fff'}
+                  fill={controller === null ? '#fff' : SEAT_LABEL[controller]}
                 >
                   {island}
                 </text>

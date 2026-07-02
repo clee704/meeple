@@ -6,9 +6,11 @@
   --line: #ddd7cb;
   --accent: #1d6f5c;
   --accent-ink: #ffffff;
-  --p0: #b3542e; /* seat 0 */
-  --p1: #33628c; /* seat 1 */
+  --p0: #c0392b; /* seat 0 — red */
+  --p1: #d4a017; /* seat 1 — yellow */
   --danger: #9c2f2f;
+  --board: #a6dcef; /* sea around the islands */
+  --island: #35835a; /* unoccupied island */
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color: var(--ink);
   background: var(--bg);
@@ -129,7 +131,7 @@ input {
 .kahuna-svg {
   width: 100%;
   max-width: 640px;
-  background: var(--panel);
+  background: var(--board);
   border: 1px solid var(--line);
   border-radius: 12px;
 }
@@ -194,8 +196,8 @@ button.card:not(:disabled) {
 }
 
 .card.facedown {
-  background: repeating-linear-gradient(135deg, #2f6b60, #2f6b60 5px, #3f8173 5px, #3f8173 10px);
-  border-color: #26564d;
+  background: repeating-linear-gradient(135deg, #2f5d8a, #2f5d8a 5px, #3f77ad 5px, #3f77ad 10px);
+  border-color: #26496b;
 }
 
 .card.empty {
