@@ -370,20 +370,18 @@ export function KahunaBoard({
           </div>
           <div>
             <h3>Discard pile ({discardCount})</h3>
-            <div className="kahuna-pile-wrap">
-              <div className="pile">
-                {cardStack(discardCount - revealCount, () => 'card facedown')}
-              </div>
-              {revealCount > 0 && (
-                <div className="kahuna-cards">
-                  {revealed.slice(revealed.length - revealCount).map((card, i) => (
-                    <span key={i} className="card revealed">
-                      {card}
-                    </span>
-                  ))}
-                </div>
-              )}
+            <div className="pile">
+              {cardStack(discardCount - revealCount, () => 'card facedown')}
             </div>
+            {revealCount > 0 && (
+              <div className="kahuna-cards kahuna-reveal">
+                {revealed.slice(revealed.length - revealCount).map((card, i) => (
+                  <span key={i} className="card revealed">
+                    {card}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

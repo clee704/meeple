@@ -204,7 +204,11 @@ button.card:not(:disabled) {
   background: transparent;
 }
 
-/* Opponent's just-played cards, face-up beside the discard pile. */
+/* Opponent's just-played cards, face-up below the discard pile. */
+.kahuna-reveal {
+  margin-top: 0.5rem;
+}
+
 .card.revealed {
   animation: card-reveal 0.25s ease-out;
 }
@@ -212,7 +216,7 @@ button.card:not(:disabled) {
 @keyframes card-reveal {
   from {
     opacity: 0;
-    translate: -10px 0;
+    translate: 0 -10px;
   }
 }
 
