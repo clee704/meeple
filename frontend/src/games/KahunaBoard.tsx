@@ -41,7 +41,9 @@ const POS: Record<string, [number, number]> = {
   KAHU: [550, 350],
   LALE: [380, 385],
 }
-const VIEWBOX = '174 94 442 357'
+// Tight crop: island centers span x 240–550, y 160–385, radius 26, plus a
+// 12px margin — keeps the islands as large as the container allows.
+const VIEWBOX = '202 122 386 301'
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
 const SEAT_LABEL = ['var(--p0-ink)', 'var(--p1-ink)']
 
@@ -103,11 +105,16 @@ export function KahunaBoard({
   // spend, then pick the line(s)/bridge(s) they pay for, then confirm.
   const [selCards, setSelCards] = useState<number[]>([]) // indices into obs.hand
   const [selBridges, setSelBridges] = useState<number[]>([]) // bridge positions
+  // Draw source picked to end the turn: a face-up slot, or 'blind' for the
+  // draw pile. Confirmed with an explicit button so a stray tap can't end
+  // the turn by accident.
+  const [drawSel, setDrawSel] = useState<number | 'blind' | null>(null)
   const [busy, setBusy] = useState(false) // an action (or batch) is in flight
 
   useEffect(() => {
     setSelCards([])
     setSelBridges([])
+    setDrawSel(null)
   }, [observation])
 
   const optionsByPos = useMemo(() => payOptionsByBridge(legalActions), [legalActions])
@@ -126,6 +133,7 @@ export function KahunaBoard({
   }
 
   const toggleCard = (i: number) => {
+    setDrawSel(null)
     if (selCards.includes(i)) {
       const next = selCards.filter((j) => j !== i)
       // Drop the board selection if the remaining cards can't pay for it.
@@ -191,6 +199,14 @@ export function KahunaBoard({
   }
 
   const endTurn = (la: LegalAction | undefined) => la && run(() => submitAction(la.action))
+
+  // Picking a draw source is picking how the turn ends — it supersedes any
+  // half-built play, so clear that selection to keep the state readable.
+  const toggleDrawSel = (which: number | 'blind') => {
+    setSelCards([])
+    setSelBridges([])
+    setDrawSel(drawSel === which ? null : which)
+  }
 
   const nPlace = selBridges.filter((p) => obs.bridges[p] === null).length
   const nRemove = selBridges.length - nPlace
@@ -270,7 +286,7 @@ export function KahunaBoard({
 
       <div>
         <h3>Opponent's hand</h3>
-        <div className="kahuna-cards">
+        <div className="kahuna-cards kahuna-opp">
           {Array.from({ length: obs.opponent_hand_count }, (_, i) => (
             <span key={i} className="card facedown" />
           ))}
@@ -354,24 +370,47 @@ export function KahunaBoard({
                 const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
                 if (card === null) return <span key={slot} className="card empty" />
                 return (
-                  <button key={slot} className="card" disabled={!la} onClick={() => endTurn(la)}>
+                  <button
+                    key={slot}
+                    className={drawSel === slot ? 'card selected' : 'card'}
+                    aria-pressed={drawSel === slot}
+                    disabled={!la}
+                    onClick={() => toggleDrawSel(slot)}
+                  >
                     {card}
                   </button>
                 )
               })}
+              {typeof drawSel === 'number' && (
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() =>
+                    endTurn(byKind('take_faceup').find((x) => x.meta.slot === drawSel))
+                  }
+                >
+                  Take {obs.face_up[drawSel]}
+                </button>
+              )}
             </div>
           </div>
           <div>
             <h3>Draw pile ({obs.pile_count})</h3>
             <div className="kahuna-pile-wrap">
               <button
-                className="pile"
+                className={drawSel === 'blind' ? 'pile selected' : 'pile'}
+                aria-pressed={drawSel === 'blind'}
                 disabled={!drawBlind}
-                onClick={() => endTurn(drawBlind)}
+                onClick={() => toggleDrawSel('blind')}
                 aria-label={`draw pile, ${obs.pile_count} cards`}
               >
                 {cardStack(obs.pile_count, () => 'card facedown')}
               </button>
+              {drawSel === 'blind' && (
+                <button className="primary" disabled={busy} onClick={() => endTurn(drawBlind)}>
+                  Draw
+                </button>
+              )}
               {skip && (
                 <button className="kahuna-skip" onClick={() => endTurn(skip)}>
                   Skip draw
