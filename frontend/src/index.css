@@ -303,7 +303,6 @@ input {
 
 .kahuna-svg {
   width: 100%;
-  max-width: 640px;
   background: var(--board);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -457,6 +456,7 @@ button.pile:disabled {
   position: relative; /* anchors the reveal overlay */
   flex: 1 1 420px;
   min-width: 320px;
+  max-width: 640px; /* caps the flex growth, or the wrap outgrows the svg */
 }
 
 .kahuna-supply {
