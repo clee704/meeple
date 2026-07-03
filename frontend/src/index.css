@@ -303,6 +303,10 @@ input {
 
 .kahuna-svg {
   width: 100%;
+  /* Sea margin around the islands: the viewBox is cropped tight for
+     phones, so desktop gets its breathing room back as padding (the
+     background still fills the whole box). */
+  padding: 2.5rem;
   background: var(--board);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -524,6 +528,10 @@ button.pile:disabled {
 
   .kahuna-board-row {
     gap: 0.6rem;
+  }
+
+  .kahuna-svg {
+    padding: 0;
   }
 
   .card {
