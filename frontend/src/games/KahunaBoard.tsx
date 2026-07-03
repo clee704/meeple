@@ -435,9 +435,13 @@ export function KahunaBoard({
           </div>
           <div>
             <h3>Discard pile ({discardCount})</h3>
-            <div className="pile">
-              {cardStack(discardCount - revealCount, () => 'card facedown')}
-            </div>
+            {/* While a reveal holds out the whole pile, the revealed cards
+                stand in for it — no empty slot above them. */}
+            {(revealCount === 0 || discardCount > revealCount) && (
+              <div className="pile">
+                {cardStack(discardCount - revealCount, () => 'card facedown')}
+              </div>
+            )}
             {revealCount > 0 && (
               <div className="kahuna-cards kahuna-reveal">
                 {revealed.slice(revealed.length - revealCount).map((card, i) => (

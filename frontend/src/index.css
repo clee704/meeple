@@ -338,8 +338,9 @@ button.pile:disabled {
   background: transparent;
 }
 
-/* Opponent's just-played cards, face-up below the discard pile. */
-.kahuna-reveal {
+/* Opponent's just-played cards, face-up below the discard pile — or in
+   its place, when the reveal is holding out the whole pile. */
+.pile + .kahuna-reveal {
   margin-top: 0.5rem;
 }
 
