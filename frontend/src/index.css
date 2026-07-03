@@ -17,6 +17,8 @@
   --island-ink: #ffffff; /* label on an unoccupied island */
   --island-edge: #ede093; /* island outline */
   --route: rgba(203, 213, 218, 0.65); /* unbuilt route dashes — grey, so they don't read as white bridges */
+  --overlay: rgba(0, 0, 0, 0.55); /* floating panel over the board */
+  --overlay-ink: #ffffff; /* text on that panel */
   --cardback: #0477b0; /* face-down card */
   --cardback-stripe: #105a93;
   --cardback-edge: #26496b;
@@ -379,10 +381,38 @@ button.pile:disabled {
   background: transparent;
 }
 
-/* Opponent's just-played cards, face-up below the discard pile — or in
-   its place, when the reveal is holding out the whole pile. */
-.pile + .kahuna-reveal {
-  margin-top: 0.5rem;
+/* Opponent's just-played cards, floated over the board: no layout ever
+   shifts, and it's hard to miss. Pointer-transparent so the board stays
+   tappable underneath. */
+.kahuna-reveal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  z-index: 5;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  max-width: 92%;
+  padding: 0.7rem 0.9rem;
+  background: var(--overlay);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.kahuna-reveal-label {
+  color: var(--overlay-ink);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kahuna-reveal-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .card.revealed {
@@ -416,7 +446,8 @@ button.pile:disabled {
   flex-wrap: wrap;
 }
 
-.kahuna-board-row .kahuna-svg {
+.kahuna-board-wrap {
+  position: relative; /* anchors the reveal overlay */
   flex: 1 1 420px;
   min-width: 320px;
 }

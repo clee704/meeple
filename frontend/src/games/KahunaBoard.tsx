@@ -253,8 +253,8 @@ export function KahunaBoard({
   const discardCount =
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
 
-  // Briefly show the opponent's openly played cards face-up beside the
-  // discard pile before they merge into it, so you can see what they spent.
+  // Briefly float the opponent's openly played cards over the board, so
+  // you can see what they spent without anything else moving.
   const [revealed, setRevealed] = useState<string[]>([])
   const seenHistory = useRef(history.length)
   useEffect(() => {
@@ -268,8 +268,6 @@ export function KahunaBoard({
     // Batches expire FIFO, so dropping from the front removes exactly this one.
     setTimeout(() => setRevealed((prev) => prev.slice(cards.length)), 3000)
   }, [history, seat])
-  // Clamped: a reshuffle can empty the discard pile mid-reveal.
-  const revealCount = Math.min(revealed.length, discardCount)
 
   // Flag cards that just entered your hand — a blind draw is easy to miss.
   // Your hand is sorted, so the newcomer is found by multiset diff.
@@ -327,72 +325,86 @@ export function KahunaBoard({
       </div>
 
       <div className="kahuna-board-row">
-        <svg viewBox={VIEWBOX} className="kahuna-svg">
-          {bridges.map(([a, b], pos) => {
-            const [x1, y1] = POS[a]
-            const [x2, y2] = POS[b]
-            const owner = obs.bridges[pos]
-            const selected = selBridges.includes(pos)
-            const active = selected || (yourTurn && canAdd(pos))
-            const base =
-              owner === null
-                ? selected
-                  ? // Ghost of the bridge you're about to build.
-                    { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.75 }
-                  : active
-                    ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.9 }
-                    : { stroke: 'var(--route)', strokeWidth: 2, strokeDasharray: '4 5' }
-                : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.65 : 1 }
-            return (
-              <g
-                key={pos}
-                className={selected ? 'bridge active selected' : active ? 'bridge active' : 'bridge'}
-                onClick={active ? () => toggleBridge(pos) : undefined}
-              >
-                <line x1={x1} y1={y1} x2={x2} y2={y2} {...base} />
-                {owner !== null && active && (
-                  // Marked (or markable) for demolition.
-                  <line
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
-                    stroke="var(--danger)"
-                    strokeWidth={selected ? 5 : 10}
-                    strokeDasharray={selected ? '6 4' : undefined}
-                    opacity={selected ? 0.95 : 0.3}
-                  />
-                )}
-                {active && <line x1={x1} y1={y1} x2={x2} y2={y2} className="bridge-hit" />}
-              </g>
-            )
-          })}
-          {islands.map((island) => {
-            const [x, y] = POS[island]
-            const controller = obs.control[island]
-            return (
-              <g key={island}>
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={26}
-                  fill={controller === null ? 'var(--island)' : SEAT_COLOR[controller]}
-                  stroke="var(--island-edge)"
-                  strokeWidth={0}
-                />
-                <text
-                  x={x}
-                  y={y + 4}
-                  textAnchor="middle"
-                  fontSize={11}
-                  fill={controller === null ? 'var(--island-ink)' : SEAT_LABEL[controller]}
+        <div className="kahuna-board-wrap">
+          <svg viewBox={VIEWBOX} className="kahuna-svg">
+            {bridges.map(([a, b], pos) => {
+              const [x1, y1] = POS[a]
+              const [x2, y2] = POS[b]
+              const owner = obs.bridges[pos]
+              const selected = selBridges.includes(pos)
+              const active = selected || (yourTurn && canAdd(pos))
+              const base =
+                owner === null
+                  ? selected
+                    ? // Ghost of the bridge you're about to build.
+                      { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.75 }
+                    : active
+                      ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.9 }
+                      : { stroke: 'var(--route)', strokeWidth: 2, strokeDasharray: '4 5' }
+                  : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.65 : 1 }
+              return (
+                <g
+                  key={pos}
+                  className={selected ? 'bridge active selected' : active ? 'bridge active' : 'bridge'}
+                  onClick={active ? () => toggleBridge(pos) : undefined}
                 >
-                  {island}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} {...base} />
+                  {owner !== null && active && (
+                    // Marked (or markable) for demolition.
+                    <line
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke="var(--danger)"
+                      strokeWidth={selected ? 5 : 10}
+                      strokeDasharray={selected ? '6 4' : undefined}
+                      opacity={selected ? 0.95 : 0.3}
+                    />
+                  )}
+                  {active && <line x1={x1} y1={y1} x2={x2} y2={y2} className="bridge-hit" />}
+                </g>
+              )
+            })}
+            {islands.map((island) => {
+              const [x, y] = POS[island]
+              const controller = obs.control[island]
+              return (
+                <g key={island}>
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={26}
+                    fill={controller === null ? 'var(--island)' : SEAT_COLOR[controller]}
+                    stroke="var(--island-edge)"
+                    strokeWidth={0}
+                  />
+                  <text
+                    x={x}
+                    y={y + 4}
+                    textAnchor="middle"
+                    fontSize={11}
+                    fill={controller === null ? 'var(--island-ink)' : SEAT_LABEL[controller]}
+                  >
+                    {island}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
+          {revealed.length > 0 && (
+            <div className="kahuna-reveal">
+              <span className="kahuna-reveal-label">Opponent played</span>
+              <div className="kahuna-reveal-cards">
+                {revealed.map((card, i) => (
+                  <span key={i} className="card revealed">
+                    {card}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="kahuna-supply">
           <div>
@@ -439,22 +451,7 @@ export function KahunaBoard({
           </div>
           <div>
             <h3>Discard pile ({discardCount})</h3>
-            {/* While a reveal holds out the whole pile, the revealed cards
-                stand in for it — no empty slot above them. */}
-            {(revealCount === 0 || discardCount > revealCount) && (
-              <div className="pile">
-                {cardStack(discardCount - revealCount, () => 'card facedown')}
-              </div>
-            )}
-            {revealCount > 0 && (
-              <div className="kahuna-cards kahuna-reveal">
-                {revealed.slice(revealed.length - revealCount).map((card, i) => (
-                  <span key={i} className="card revealed">
-                    {card}
-                  </span>
-                ))}
-              </div>
-            )}
+            <div className="pile">{cardStack(discardCount, () => 'card facedown')}</div>
           </div>
         </div>
       </div>
