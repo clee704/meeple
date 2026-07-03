@@ -29,22 +29,22 @@ interface KahunaMeta {
 // Island positions, hand-placed to match meeple/games/kahuna/board.svg;
 // the topology itself always comes from the game's meta, never from here.
 const POS: Record<string, [number, number]> = {
-  ALOA: [240, 170],
-  BARI: [385, 160],
-  COCO: [550, 170],
-  DUDA: [305, 225],
+  ALOA: [240, 175],
+  BARI: [385, 155],
+  COCO: [550, 175],
+  DUDA: [303, 225],
   ELAI: [380, 240],
   FAAA: [455, 215],
-  GOLA: [510, 260],
-  HUNA: [245, 305],
-  IFFI: [360, 315],
+  GOLA: [512, 260],
+  HUNA: [250, 310],
+  IFFI: [365, 315],
   JOJO: [445, 290],
   KAHU: [550, 350],
-  LALE: [380, 385],
+  LALE: [385, 385],
 }
 // Tight crop: island centers span x 240–550, y 160–385, radius 26, plus a
 // 12px margin — keeps the islands as large as the container allows.
-const VIEWBOX = '202 122 386 301'
+const VIEWBOX = '202 117 386 306'
 // One-shot per browser: set once the drawing-ends-your-turn reminder has
 // been shown, so it never fires again.
 const DRAW_NOTICE_KEY = 'meeple.kahuna.draw-notice'
@@ -56,6 +56,7 @@ const SEAT_LABEL = ['var(--p0-ink)', 'var(--p1-ink)']
 // right-down.
 function cardStack(count: number, classFor: (i: number) => string) {
   if (count === 0) return <span className="card empty" />
+  count = Math.min(count, 5)
   return Array.from({ length: count }, (_, i) => {
     const depth = count - 1 - i
     return (
@@ -308,7 +309,7 @@ export function KahunaBoard({
             them {obs.scores[1 - seat]}
           </b>
         </span>
-        <span>Round {round}/3</span>
+        <span>Round {round}</span>
         {obs.final_turns_remaining !== null && (
           <span className="dim">Final turns: {obs.final_turns_remaining}</span>
         )}
@@ -428,7 +429,7 @@ export function KahunaBoard({
             </div>
           </div>
           <div>
-            <h3>Draw pile ({obs.pile_count})</h3>
+            <h3>Draw ({obs.pile_count})</h3>
             <button
               className={drawSel === 'blind' ? 'pile selected' : 'pile'}
               aria-pressed={drawSel === 'blind'}
@@ -450,7 +451,7 @@ export function KahunaBoard({
             </button>
           </div>
           <div>
-            <h3>Discard pile ({discardCount})</h3>
+            <h3>Discard ({discardCount})</h3>
             <div className="pile">{cardStack(discardCount, () => 'card facedown')}</div>
           </div>
         </div>
@@ -496,7 +497,7 @@ export function KahunaBoard({
         <h3>Log</h3>
         <ul className="kahuna-log">
           {history
-            .slice(-8)
+            .slice(-1)
             .reverse()
             .map((h, i) => (
               <li key={history.length - i}>{historyLine(h, seat)}</li>

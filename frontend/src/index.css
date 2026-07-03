@@ -22,7 +22,7 @@
   --cardback: #0477b0; /* face-down card */
   --cardback-stripe: #105a93;
   --cardback-edge: #26496b;
-  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  font: 16px/1.5 'Inter', system-ui, sans-serif;
   color: var(--ink);
   background: var(--bg);
   cursor: default;
@@ -132,6 +132,7 @@ input {
   padding: 0.5rem 0;
   margin-bottom: 0.6rem;
   min-height: 2.4rem;
+  font-size: 0.9rem;
 }
 
 .hud-turn {
@@ -306,7 +307,7 @@ input {
   /* Sea margin around the islands: the viewBox is cropped tight for
      phones, so desktop gets its breathing room back as padding (the
      background still fills the whole box). */
-  padding: 2.5rem;
+  padding: 2rem;
   background: var(--board);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -332,6 +333,7 @@ input {
   margin: 0 0 0.3rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .kahuna-cards {
@@ -343,10 +345,10 @@ input {
 }
 
 .card {
-  width: 62px;
-  height: 88px;
+  width: 59px;
+  height: 92px;
   border: 1.5px solid var(--ink);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
   display: inline-grid;
   place-items: center;
@@ -471,10 +473,10 @@ button.pile:disabled {
 
 .pile {
   position: relative;
-  width: 84px;
-  height: 102px;
+  width: 63px;
+  height: 96px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: none;
   padding: 0;
 }
@@ -546,8 +548,8 @@ button.pile:disabled {
   }
 
   .pile {
-    width: 74px;
-    height: 90px;
+    width: 58px;
+    height: 78px;
   }
 
   /* The opponent's hand only conveys its size — shrink it. */
@@ -599,4 +601,20 @@ button.pile:disabled {
   place-items: center;
   font-size: 2.4rem;
   font-weight: 700;
+}
+
+.kahuna-board-wrap,
+.card {
+  font-family: "Alegreya Sans SC", system-ui, sans-serif;
+  font-size: 1.0rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 700px) {
+  .kahuna-board-wrap,
+  .card {
+    font-size: 0.9rem;
+  }
 }
