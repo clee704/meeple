@@ -117,13 +117,20 @@ input {
 }
 
 /* Match HUD: slim status bar — turn pill on the left, clock and the
-   kebab menu pinned top-right. */
+   kebab menu pinned top-right. Sticky, so whose turn it is stays
+   visible however far the page is scrolled. */
 .hud {
+  position: sticky;
+  top: 0;
+  z-index: 8; /* over the board and its reveal overlay, under menu/modal */
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+  margin-bottom: 0.6rem;
   min-height: 2.4rem;
 }
 
@@ -500,10 +507,6 @@ button.pile:disabled {
 @media (max-width: 700px) {
   main {
     padding: 0.5rem 0.5rem 1.5rem;
-  }
-
-  .hud {
-    margin-bottom: 0.6rem;
   }
 
   .kahuna {
