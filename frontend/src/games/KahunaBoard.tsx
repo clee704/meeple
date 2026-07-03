@@ -26,6 +26,12 @@ interface KahunaMeta {
   bridges: [string, string][]
 }
 
+// What the board drawing needs — held back while a reveal overlay is up.
+interface BoardSnap {
+  bridges: (number | null)[]
+  control: Record<string, number | null>
+}
+
 // Island positions, hand-placed to match meeple/games/kahuna/board.svg;
 // the topology itself always comes from the game's meta, never from here.
 const POS: Record<string, [number, number]> = {
@@ -255,20 +261,56 @@ export function KahunaBoard({
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
 
   // Briefly float the opponent's openly played cards over the board, so
-  // you can see what they spent without anything else moving.
+  // you can see what they spent without anything else moving. While a
+  // reveal is up, the board keeps showing its pre-play state — the changes
+  // land when the overlay goes, so you can tell what the play did.
   const [revealed, setRevealed] = useState<string[]>([])
+  const [heldBoards, setHeldBoards] = useState<BoardSnap[]>([])
   const seenHistory = useRef(history.length)
+  const prevBoard = useRef<BoardSnap>({ bridges: obs.bridges, control: obs.control })
   useEffect(() => {
     const fresh = history.slice(seenHistory.current)
     seenHistory.current = history.length
     const cards = fresh
       .filter((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove'))
       .flatMap((h) => h.meta.spend as string[])
-    if (cards.length === 0) return
-    setRevealed((prev) => [...prev, ...cards])
-    // Batches expire FIFO, so dropping from the front removes exactly this one.
-    setTimeout(() => setRevealed((prev) => prev.slice(cards.length)), 3000)
+    if (cards.length > 0) {
+      const snap = prevBoard.current
+      setRevealed((prev) => [...prev, ...cards])
+      setHeldBoards((prev) => [...prev, snap])
+      // Batches expire FIFO, so dropping from the front removes exactly
+      // this one (and its board snapshot).
+      setTimeout(() => {
+        setRevealed((prev) => prev.slice(cards.length))
+        setHeldBoards((prev) => prev.slice(1))
+      }, 3000)
+    }
+    prevBoard.current = { bridges: obs.bridges, control: obs.control }
+    // obs travels with history in the same envelope.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history, seat])
+  // Selection logic keeps using the live obs; only the drawing is held back.
+  const shownBoard = heldBoards[0] ?? { bridges: obs.bridges, control: obs.control }
+
+  // A scoring pause: when a round scores, float the round's points and the
+  // running total over the board for a while.
+  const [roundScore, setRoundScore] = useState<{
+    round: number
+    delta: number[]
+    total: number[]
+  } | null>(null)
+  const prevScore = useRef({ count: obs.scoring_count, scores: obs.scores })
+  useEffect(() => {
+    const prev = prevScore.current
+    prevScore.current = { count: obs.scoring_count, scores: obs.scores }
+    if (obs.scoring_count === prev.count) return
+    setRoundScore({
+      round: prev.count + 1,
+      delta: obs.scores.map((s, i) => s - prev.scores[i]),
+      total: obs.scores,
+    })
+    setTimeout(() => setRoundScore(null), 6000)
+  }, [obs.scoring_count, obs.scores])
 
   // Flag cards that just entered your hand — a blind draw is easy to miss.
   // Your hand is sorted, so the newcomer is found by multiset diff.
@@ -331,7 +373,7 @@ export function KahunaBoard({
             {bridges.map(([a, b], pos) => {
               const [x1, y1] = POS[a]
               const [x2, y2] = POS[b]
-              const owner = obs.bridges[pos]
+              const owner = shownBoard.bridges[pos]
               const selected = selBridges.includes(pos)
               const active = selected || (yourTurn && canAdd(pos))
               const base =
@@ -369,7 +411,7 @@ export function KahunaBoard({
             })}
             {islands.map((island) => {
               const [x, y] = POS[island]
-              const controller = obs.control[island]
+              const controller = shownBoard.control[island]
               return (
                 <g key={island}>
                   <circle
@@ -393,16 +435,33 @@ export function KahunaBoard({
               )
             })}
           </svg>
-          {revealed.length > 0 && (
-            <div className="kahuna-reveal">
-              <span className="kahuna-reveal-label">Opponent played</span>
-              <div className="kahuna-reveal-cards">
-                {revealed.map((card, i) => (
-                  <span key={i} className="card revealed">
-                    {card}
-                  </span>
-                ))}
-              </div>
+          {(revealed.length > 0 || roundScore) && (
+            <div className="kahuna-overlay">
+              {roundScore && (
+                <div className="kahuna-overlay-panel">
+                  <span className="kahuna-overlay-label">Round {roundScore.round} scored</span>
+                  <div className="kahuna-round-lines">
+                    <span>
+                      You +{roundScore.delta[seat]} · Opponent +{roundScore.delta[1 - seat]}
+                    </span>
+                    <span className="total">
+                      Total {roundScore.total[seat]} : {roundScore.total[1 - seat]}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {revealed.length > 0 && (
+                <div className="kahuna-overlay-panel">
+                  <span className="kahuna-overlay-label">Opponent played</span>
+                  <div className="kahuna-reveal-cards">
+                    {revealed.map((card, i) => (
+                      <span key={i} className="card revealed">
+                        {card}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

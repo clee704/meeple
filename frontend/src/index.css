@@ -393,10 +393,10 @@ button.pile:disabled {
   background: transparent;
 }
 
-/* Opponent's just-played cards, floated over the board: no layout ever
-   shifts, and it's hard to miss. Pointer-transparent so the board stays
-   tappable underneath. */
-.kahuna-reveal {
+/* Transient notices (opponent's just-played cards, round scores) floated
+   over the board: no layout ever shifts, and they're hard to miss.
+   Pointer-transparent so the board stays tappable underneath. */
+.kahuna-overlay {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -404,15 +404,21 @@ button.pile:disabled {
   z-index: 5;
   display: grid;
   justify-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   max-width: 92%;
-  padding: 0.7rem 0.9rem;
-  background: var(--overlay);
-  border-radius: 12px;
   pointer-events: none;
 }
 
-.kahuna-reveal-label {
+.kahuna-overlay-panel {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--overlay);
+  border-radius: 12px;
+}
+
+.kahuna-overlay-label {
   color: var(--overlay-ink);
   font-size: 0.8rem;
   font-weight: 600;
@@ -425,6 +431,18 @@ button.pile:disabled {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
+}
+
+.kahuna-round-lines {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  color: var(--overlay-ink);
+}
+
+.kahuna-round-lines .total {
+  font-size: 1.2rem;
+  font-weight: 700;
 }
 
 .card.revealed {
