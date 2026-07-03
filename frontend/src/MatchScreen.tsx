@@ -55,17 +55,19 @@ function Menu({ items }: { items: { label: string; danger?: boolean; onClick: ()
 function Hud({
   env,
   clock,
+  turnClock,
   session,
   onExit,
   onQuit,
 }: {
   env: Envelope
   clock: string
+  turnClock: string
   session: Session
   onExit: () => void
   onQuit: () => void
 }) {
-  const turnClock = (
+  const matchClock = (
     <span className="hud-clock">
       Turn {env.turn_count} · {clock}
     </span>
@@ -84,7 +86,7 @@ function Hud({
       <header className="hud">
         <strong className="hud-verdict">{verdict}</strong>
         <div className="hud-right">
-          {turnClock}
+          {matchClock}
           <button className="primary" onClick={onExit}>
             Back to lobby
           </button>
@@ -110,10 +112,10 @@ function Hud({
   return (
     <header className="hud">
       <span className={env.your_turn ? 'hud-turn you' : 'hud-turn'}>
-        {env.your_turn ? 'Your turn' : "Opponent's turn…"}
+        {env.your_turn ? 'Your turn' : "Opponent's turn"} · {turnClock}
       </span>
       <div className="hud-right">
-        {turnClock}
+        {matchClock}
         <Menu items={[{ label: 'Quit match', danger: true, onClick: onQuit }]} />
       </div>
     </header>
@@ -133,8 +135,12 @@ export function MatchScreen({
   const [meta, setMeta] = useState<Record<string, unknown>>({})
   const envRef = useRef<Envelope | null>(null)
   const absorbedAtRef = useRef(Date.now())
+  // When the current turn began, as seen by this client — the server
+  // doesn't report it, so a page (re)load starts the count from zero.
+  const turnStartRef = useRef(Date.now())
 
   const absorb = useCallback((e: Envelope) => {
+    if (envRef.current?.turn_count !== e.turn_count) turnStartRef.current = Date.now()
     envRef.current = e
     absorbedAtRef.current = Date.now()
     setEnv(e)
@@ -204,10 +210,18 @@ export function MatchScreen({
 
   const elapsed =
     env.elapsed_seconds + (running ? (Date.now() - absorbedAtRef.current) / 1000 : 0)
+  const turnElapsed = running ? (Date.now() - turnStartRef.current) / 1000 : 0
   const Board = renderers[env.game_id]
   return (
     <div className="match">
-      <Hud env={env} clock={formatClock(elapsed)} session={session} onExit={onExit} onQuit={quit} />
+      <Hud
+        env={env}
+        clock={formatClock(elapsed)}
+        turnClock={formatClock(turnElapsed)}
+        session={session}
+        onExit={onExit}
+        onQuit={quit}
+      />
       {Board ? (
         <Board
           observation={env.observation}

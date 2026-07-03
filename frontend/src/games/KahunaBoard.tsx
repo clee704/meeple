@@ -44,6 +44,9 @@ const POS: Record<string, [number, number]> = {
 // Tight crop: island centers span x 240–550, y 160–385, radius 26, plus a
 // 12px margin — keeps the islands as large as the container allows.
 const VIEWBOX = '202 122 386 301'
+// One-shot per browser: set once the drawing-ends-your-turn reminder has
+// been shown, so it never fires again.
+const DRAW_NOTICE_KEY = 'meeple.kahuna.draw-notice'
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
 const SEAT_LABEL = ['var(--p0-ink)', 'var(--p1-ink)']
 
@@ -206,6 +209,25 @@ export function KahunaBoard({
     setSelCards([])
     setSelBridges([])
     setDrawSel(drawSel === which ? null : which)
+  }
+
+  // First draw ever in this browser gets a one-time heads-up; after that
+  // the Draw button acts immediately.
+  const draw = (la: LegalAction | undefined) => {
+    if (!la) return
+    if (!localStorage.getItem(DRAW_NOTICE_KEY)) {
+      localStorage.setItem(DRAW_NOTICE_KEY, '1')
+      if (!confirm('Heads-up: drawing a card ends your turn. Draw now?')) return
+    }
+    endTurn(la)
+  }
+
+  // Skipping the draw is rare enough that a mishit is likelier than the
+  // real intent — always confirm.
+  const skipDraw = (la: LegalAction | undefined) => {
+    if (!la) return
+    if (!confirm('Skip your draw? Your turn ends without taking a card.')) return
+    endTurn(la)
   }
 
   const nPlace = selBridges.filter((p) => obs.bridges[p] === null).length
@@ -404,10 +426,10 @@ export function KahunaBoard({
           {/* Always rendered so nothing shifts; Draw arms only once a
               face-up card or the pile is selected. */}
           <div className="action-row kahuna-draw-actions">
-            <button className="primary" disabled={!drawAction || busy} onClick={() => endTurn(drawAction)}>
+            <button className="primary" disabled={!drawAction || busy} onClick={() => draw(drawAction)}>
               Draw
             </button>
-            <button disabled={!skip || busy} onClick={() => endTurn(skip)}>
+            <button disabled={!skip || busy} onClick={() => skipDraw(skip)}>
               Skip draw
             </button>
           </div>

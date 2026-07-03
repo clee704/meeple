@@ -402,11 +402,11 @@ button.pile:disabled {
 }
 
 /* Draw pile picked as this turn's draw source (confirmed via the Draw
-   button, mirroring .card.selected). */
-.pile.selected {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-  border-radius: 8px;
+   button): only the topmost card — the one you'd take — lights up,
+   mirroring .card.selected. */
+.pile.selected .card:last-child {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .kahuna-confirm {
