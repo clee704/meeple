@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useConfirm } from '../Confirm'
 import type { HistoryEntry, LegalAction } from '../types'
 import type { GameRendererProps } from './registry'
 import { matchSelection, payOptionsByBridge } from './kahunaSelect'
@@ -113,6 +114,7 @@ export function KahunaBoard({
   // the turn by accident.
   const [drawSel, setDrawSel] = useState<number | 'blind' | null>(null)
   const [busy, setBusy] = useState(false) // an action (or batch) is in flight
+  const [confirmDialog, ask] = useConfirm()
 
   useEffect(() => {
     setSelCards([])
@@ -189,12 +191,12 @@ export function KahunaBoard({
   const canDiscard =
     selBridges.length === 0 && selNames.length > 0 && selNames.every((n) => discardActions.has(n))
 
-  const discard = () => {
+  const discard = async () => {
     const n = selNames.length
     const msg =
       `Discard ${n} card${n > 1 ? 's' : ''} (${selNames.join(', ')}) face-down? ` +
       `You can't play cards after discarding — you must end your turn by drawing.`
-    if (!confirm(msg)) return
+    if (!(await ask(msg, { confirmLabel: 'Discard' }))) return
     const actions = selNames.map((name) => discardActions.get(name)!)
     return run(async () => {
       for (const a of actions) if (!(await submitAction(a))) return
@@ -213,20 +215,22 @@ export function KahunaBoard({
 
   // First draw ever in this browser gets a one-time heads-up; after that
   // the Draw button acts immediately.
-  const draw = (la: LegalAction | undefined) => {
+  const draw = async (la: LegalAction | undefined) => {
     if (!la) return
     if (!localStorage.getItem(DRAW_NOTICE_KEY)) {
       localStorage.setItem(DRAW_NOTICE_KEY, '1')
-      if (!confirm('Heads-up: drawing a card ends your turn. Draw now?')) return
+      if (!(await ask('Heads-up: drawing a card ends your turn. Draw now?', { confirmLabel: 'Draw' })))
+        return
     }
     endTurn(la)
   }
 
   // Skipping the draw is rare enough that a mishit is likelier than the
   // real intent — always confirm.
-  const skipDraw = (la: LegalAction | undefined) => {
+  const skipDraw = async (la: LegalAction | undefined) => {
     if (!la) return
-    if (!confirm('Skip your draw? Your turn ends without taking a card.')) return
+    if (!(await ask('Skip your draw? Your turn ends without taking a card.', { confirmLabel: 'Skip draw' })))
+      return
     endTurn(la)
   }
 
@@ -502,6 +506,7 @@ export function KahunaBoard({
             ))}
         </ul>
       </div>
+      {confirmDialog}
     </div>
   )
 }

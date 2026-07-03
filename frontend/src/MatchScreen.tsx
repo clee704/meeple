@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, getState, leaveMatch, postAction } from './api'
+import { useConfirm } from './Confirm'
 import { renderers } from './games/registry'
 import type { Envelope, Session } from './types'
 
@@ -133,6 +134,7 @@ export function MatchScreen({
 }) {
   const [env, setEnv] = useState<Envelope | null>(null)
   const [meta, setMeta] = useState<Record<string, unknown>>({})
+  const [confirmDialog, ask] = useConfirm()
   const envRef = useRef<Envelope | null>(null)
   const absorbedAtRef = useRef(Date.now())
   // When the current turn began, as seen by this client — the server
@@ -194,7 +196,7 @@ export function MatchScreen({
   const quit = async () => {
     const prompt =
       env?.status === 'in_progress' ? 'Quit this match? Your opponent wins by forfeit.' : 'Quit this match?'
-    if (!confirm(prompt)) return
+    if (!(await ask(prompt, { confirmLabel: 'Quit match', danger: true }))) return
     try {
       await leaveMatch(session)
     } catch (err) {
@@ -238,6 +240,7 @@ export function MatchScreen({
           No renderer registered for <code>{env.game_id}</code>.
         </p>
       )}
+      {confirmDialog}
     </div>
   )
 }
