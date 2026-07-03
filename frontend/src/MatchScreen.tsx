@@ -137,12 +137,8 @@ export function MatchScreen({
   const [confirmDialog, ask] = useConfirm()
   const envRef = useRef<Envelope | null>(null)
   const absorbedAtRef = useRef(Date.now())
-  // When the current turn began, as seen by this client — the server
-  // doesn't report it, so a page (re)load starts the count from zero.
-  const turnStartRef = useRef(Date.now())
 
   const absorb = useCallback((e: Envelope) => {
-    if (envRef.current?.turn_count !== e.turn_count) turnStartRef.current = Date.now()
     envRef.current = e
     absorbedAtRef.current = Date.now()
     setEnv(e)
@@ -210,9 +206,11 @@ export function MatchScreen({
 
   if (!env) return <p className="dim">Loading…</p>
 
-  const elapsed =
-    env.elapsed_seconds + (running ? (Date.now() - absorbedAtRef.current) / 1000 : 0)
-  const turnElapsed = running ? (Date.now() - turnStartRef.current) / 1000 : 0
+  // Both clocks come from the server (so they survive reloads) and tick
+  // locally between polls.
+  const sinceAbsorb = running ? (Date.now() - absorbedAtRef.current) / 1000 : 0
+  const elapsed = env.elapsed_seconds + sinceAbsorb
+  const turnElapsed = env.turn_elapsed_seconds + sinceAbsorb
   const Board = renderers[env.game_id]
   return (
     <div className="match">

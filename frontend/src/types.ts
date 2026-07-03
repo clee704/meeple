@@ -29,6 +29,7 @@ export interface Envelope {
   forfeited_by: number | null
   turn_count: number
   elapsed_seconds: number
+  turn_elapsed_seconds: number
   meta?: Record<string, unknown>
 }
 

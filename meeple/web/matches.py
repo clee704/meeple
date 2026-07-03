@@ -61,6 +61,7 @@ class Match:
     # actions by one player: it advances when `to_move` changes hands.
     turn_count: int = 1
     started_at: float | None = None  # monotonic; set when the last seat fills
+    turn_started_at: float | None = None  # monotonic; reset when the turn passes
     finished_at: float | None = None
 
     @property
@@ -101,6 +102,7 @@ class Match:
             self.finished_at = time.monotonic()
         elif self.state.current_player() != seat:
             self.turn_count += 1
+            self.turn_started_at = time.monotonic()
         self.version += 1
 
     def envelope(self, seat: int, include_meta: bool) -> dict:
@@ -124,16 +126,20 @@ class Match:
             "forfeited_by": self.forfeited_by,
             "turn_count": self.turn_count,
             "elapsed_seconds": self._elapsed_seconds(),
+            "turn_elapsed_seconds": self._since(self.turn_started_at),
         }
         if include_meta:
             env["meta"] = self.view.game_meta()
         return env
 
     def _elapsed_seconds(self) -> float:
-        if self.started_at is None:
+        return self._since(self.started_at)
+
+    def _since(self, start: float | None) -> float:
+        if start is None:
             return 0.0
         end = self.finished_at if self.finished_at is not None else time.monotonic()
-        return end - self.started_at
+        return end - start
 
     def _result(self) -> dict | None:
         if self.forfeited_by is not None:
@@ -186,6 +192,7 @@ class MatchStore:
         match.tokens[seat] = token
         if None not in match.tokens:
             match.started_at = time.monotonic()  # the clock runs on play, not waiting
+            match.turn_started_at = match.started_at
         match.version += 1  # wakes the creator's poll: status flips to in_progress
         return match, seat, token
 

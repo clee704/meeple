@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 import meeple.games  # noqa: F401 — side effect: registers games + views
 from meeple.web.app import create_app
+from meeple.web.matches import MatchStore
 
 
 @pytest.fixture
@@ -80,6 +81,7 @@ def test_create_then_waiting_state(client):
     assert "meta" in env  # initial fetch bootstraps the renderer
     assert env["turn_count"] == 1
     assert env["elapsed_seconds"] == 0.0  # the clock doesn't run while waiting
+    assert env["turn_elapsed_seconds"] == 0.0
 
 
 def test_join_assigns_seat_1_then_match_is_full(client):
@@ -178,6 +180,20 @@ def test_turn_count_advances_when_the_turn_passes(client):
     assert _state(client, match_id, token1)["turn_count"] == 2
 
 
+def test_turn_clock_restarts_when_the_turn_passes():
+    store = MatchStore()
+    match, _token = store.create("kahuna", seed=1)
+    store.join(match.join_code)
+    # Backdate the running turn: a poll must report the elapsed time (this
+    # is what survives a page refresh) …
+    match.turn_started_at -= 100.0
+    assert match.envelope(0, include_meta=False)["turn_elapsed_seconds"] >= 100.0
+    assert match.envelope(0, include_meta=False)["elapsed_seconds"] < 100.0
+    # … and passing the turn (135 = draw-blind, see above) restarts it.
+    match.apply(0, 135)
+    assert match.envelope(0, include_meta=False)["turn_elapsed_seconds"] < 100.0
+
+
 def test_kuhn_playthrough_and_polling(client):
     created = _create(client)
     match_id, token0 = created["match_id"], created["token"]
@@ -230,6 +246,7 @@ def test_same_seed_and_actions_give_identical_envelopes(client):
         for seat in (0, 1):
             for env in (envs[0][seat], envs[1][seat]):
                 env.pop("elapsed_seconds")  # wall-clock, inherently run-specific
+                env.pop("turn_elapsed_seconds")
             assert envs[0][seat] == envs[1][seat]
         if envs[0][0]["status"] != "in_progress":
             break
