@@ -217,6 +217,12 @@ export function KahunaBoard({
 
   const drawBlind = byKind('draw_blind')[0]
   const skip = byKind('skip')[0]
+  const drawAction =
+    drawSel === 'blind'
+      ? drawBlind
+      : drawSel !== null
+        ? byKind('take_faceup').find((x) => x.meta.slot === drawSel)
+        : undefined
   const round = Math.min(obs.scoring_count + 1, 3)
   const discardCount =
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
@@ -381,42 +387,29 @@ export function KahunaBoard({
                   </button>
                 )
               })}
-              {typeof drawSel === 'number' && (
-                <button
-                  className="primary"
-                  disabled={busy}
-                  onClick={() =>
-                    endTurn(byKind('take_faceup').find((x) => x.meta.slot === drawSel))
-                  }
-                >
-                  Take {obs.face_up[drawSel]}
-                </button>
-              )}
             </div>
           </div>
           <div>
             <h3>Draw pile ({obs.pile_count})</h3>
-            <div className="kahuna-pile-wrap">
-              <button
-                className={drawSel === 'blind' ? 'pile selected' : 'pile'}
-                aria-pressed={drawSel === 'blind'}
-                disabled={!drawBlind}
-                onClick={() => toggleDrawSel('blind')}
-                aria-label={`draw pile, ${obs.pile_count} cards`}
-              >
-                {cardStack(obs.pile_count, () => 'card facedown')}
-              </button>
-              {drawSel === 'blind' && (
-                <button className="primary" disabled={busy} onClick={() => endTurn(drawBlind)}>
-                  Draw
-                </button>
-              )}
-              {skip && (
-                <button className="kahuna-skip" onClick={() => endTurn(skip)}>
-                  Skip draw
-                </button>
-              )}
-            </div>
+            <button
+              className={drawSel === 'blind' ? 'pile selected' : 'pile'}
+              aria-pressed={drawSel === 'blind'}
+              disabled={!drawBlind}
+              onClick={() => toggleDrawSel('blind')}
+              aria-label={`draw pile, ${obs.pile_count} cards`}
+            >
+              {cardStack(obs.pile_count, () => 'card facedown')}
+            </button>
+          </div>
+          {/* Always rendered so nothing shifts; Draw arms only once a
+              face-up card or the pile is selected. */}
+          <div className="action-row kahuna-draw-actions">
+            <button className="primary" disabled={!drawAction || busy} onClick={() => endTurn(drawAction)}>
+              Draw
+            </button>
+            <button disabled={!skip || busy} onClick={() => endTurn(skip)}>
+              Skip draw
+            </button>
           </div>
           <div>
             <h3>Discard pile ({discardCount})</h3>

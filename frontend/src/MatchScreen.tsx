@@ -13,7 +13,46 @@ function formatClock(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
-function Banner({
+// Kebab (⋮) dropdown anchored to the HUD's top-right corner, for actions
+// that shouldn't sit as bare buttons in the chrome (e.g. quitting).
+function Menu({ items }: { items: { label: string; danger?: boolean; onClick: () => void }[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="menu">
+      <button
+        className="menu-btn"
+        aria-label="Match menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        ⋮
+      </button>
+      {open && (
+        <>
+          <div className="menu-backdrop" onClick={() => setOpen(false)} />
+          <div className="menu-pop" role="menu">
+            {items.map(({ label, danger, onClick }) => (
+              <button
+                key={label}
+                role="menuitem"
+                className={danger ? 'danger' : undefined}
+                onClick={() => {
+                  setOpen(false)
+                  onClick()
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Hud({
   env,
   clock,
   session,
@@ -27,7 +66,7 @@ function Banner({
   onQuit: () => void
 }) {
   const turnClock = (
-    <span className="dim">
+    <span className="hud-clock">
       Turn {env.turn_count} · {clock}
     </span>
   )
@@ -42,33 +81,42 @@ function Banner({
             return winner === null ? 'Draw.' : winner === env.seat ? 'You win!' : 'You lose.'
           })()
     return (
-      <div className="banner">
-        <strong>{verdict}</strong>
-        {turnClock}
-        <button onClick={onExit}>Back to lobby</button>
-      </div>
+      <header className="hud">
+        <strong className="hud-verdict">{verdict}</strong>
+        <div className="hud-right">
+          {turnClock}
+          <button className="primary" onClick={onExit}>
+            Back to lobby
+          </button>
+        </div>
+      </header>
     )
   }
   if (env.status === 'waiting') {
     const link = `${location.origin}${location.pathname}#/join/${session.joinCode}`
     return (
-      <div className="banner">
+      <header className="hud">
         <div>
-          Waiting for an opponent — join code <strong>{session.joinCode}</strong>
-          <div className="dim">
-            Same network: <a href={link}>{link}</a>
+          <span className="hud-turn">Waiting for an opponent…</span>
+          <div className="dim hud-join">
+            join code <strong>{session.joinCode}</strong> · same network:{' '}
+            <a href={link}>{link}</a>
           </div>
         </div>
-        <button onClick={onQuit}>Quit</button>
-      </div>
+        <Menu items={[{ label: 'Quit match', danger: true, onClick: onQuit }]} />
+      </header>
     )
   }
   return (
-    <div className="banner">
-      {env.your_turn ? 'Your turn.' : "Opponent's turn…"}
-      {turnClock}
-      <button onClick={onQuit}>Quit</button>
-    </div>
+    <header className="hud">
+      <span className={env.your_turn ? 'hud-turn you' : 'hud-turn'}>
+        {env.your_turn ? 'Your turn' : "Opponent's turn…"}
+      </span>
+      <div className="hud-right">
+        {turnClock}
+        <Menu items={[{ label: 'Quit match', danger: true, onClick: onQuit }]} />
+      </div>
+    </header>
   )
 }
 
@@ -152,14 +200,14 @@ export function MatchScreen({
     onExit()
   }
 
-  if (!env) return <div className="banner">Loading…</div>
+  if (!env) return <p className="dim">Loading…</p>
 
   const elapsed =
     env.elapsed_seconds + (running ? (Date.now() - absorbedAtRef.current) / 1000 : 0)
   const Board = renderers[env.game_id]
   return (
     <div className="match">
-      <Banner env={env} clock={formatClock(elapsed)} session={session} onExit={onExit} onQuit={quit} />
+      <Hud env={env} clock={formatClock(elapsed)} session={session} onExit={onExit} onQuit={quit} />
       {Board ? (
         <Board
           observation={env.observation}
