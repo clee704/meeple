@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useConfirm } from '../Confirm'
 import type { HistoryEntry, LegalAction } from '../types'
 import type { GameRendererProps } from './registry'
@@ -268,7 +268,9 @@ export function KahunaBoard({
   const [heldBoards, setHeldBoards] = useState<BoardSnap[]>([])
   const seenHistory = useRef(history.length)
   const prevBoard = useRef<BoardSnap>({ bridges: obs.bridges, control: obs.control })
-  useEffect(() => {
+  // Layout effect: the hold must land in the same paint as the new
+  // observation, or the changed board flashes for a frame first.
+  useLayoutEffect(() => {
     const fresh = history.slice(seenHistory.current)
     seenHistory.current = history.length
     const cards = fresh
