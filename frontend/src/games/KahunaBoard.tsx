@@ -290,11 +290,11 @@ export function KahunaBoard({
               owner === null
                 ? selected
                   ? // Ghost of the bridge you're about to build.
-                    { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.55 }
+                    { stroke: SEAT_COLOR[seat], strokeWidth: 5, opacity: 0.75 }
                   : active
-                    ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.6 }
+                    ? { stroke: 'var(--accent)', strokeWidth: 4, strokeDasharray: '4 5', opacity: 0.9 }
                     : { stroke: 'var(--route)', strokeWidth: 2, strokeDasharray: '4 5' }
-                : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.45 : 1 }
+                : { stroke: SEAT_COLOR[owner], strokeWidth: 5, opacity: selected ? 0.65 : 1 }
             return (
               <g
                 key={pos}

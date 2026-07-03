@@ -4,8 +4,8 @@
   --ink: #2b2620;
   --dim: #8a8378;
   --line: #ddd7cb;
-  --accent: #1d6f5c;
-  --accent-ink: #ffffff;
+  --accent: #f4d446;
+  --accent-ink: var(--ink);
   --p0: #24211e; /* seat 0 — black */
   --p0-ink: #ffffff; /* label on a seat-0-colored surface */
   --p1: #ffffff; /* seat 1 — white */
