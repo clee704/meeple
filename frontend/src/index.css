@@ -327,6 +327,36 @@ input {
   cursor: pointer;
 }
 
+/* Board changes announce themselves: new bridges grow in, removed ones
+   fade out as ghosts, islands recolor smoothly on a control flip. */
+line.bridge-in {
+  animation: bridge-in 0.6s ease-out;
+}
+
+@keyframes bridge-in {
+  from {
+    opacity: 0;
+    stroke-width: 0;
+  }
+}
+
+line.bridge-out {
+  animation: bridge-out 0.6s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes bridge-out {
+  to {
+    opacity: 0;
+    stroke-width: 0;
+  }
+}
+
+.kahuna-svg circle,
+.kahuna-svg text {
+  transition: fill 0.6s ease;
+}
+
 .kahuna h3 {
   font-size: 0.85rem;
   color: var(--dim);

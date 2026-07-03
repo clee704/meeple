@@ -260,39 +260,78 @@ export function KahunaBoard({
   const discardCount =
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
 
-  // Briefly float the opponent's openly played cards over the board, so
-  // you can see what they spent without anything else moving. While a
-  // reveal is up, the board keeps showing its pre-play state — the changes
-  // land when the overlay goes, so you can tell what the play did.
-  const [revealed, setRevealed] = useState<string[]>([])
-  const [heldBoards, setHeldBoards] = useState<BoardSnap[]>([])
-  const seenHistory = useRef(history.length)
-  const prevBoard = useRef<BoardSnap>({ bridges: obs.bridges, control: obs.control })
-  // Layout effect: the hold must land in the same paint as the new
-  // observation, or the changed board flashes for a frame first.
-  useLayoutEffect(() => {
-    const fresh = history.slice(seenHistory.current)
-    seenHistory.current = history.length
-    const cards = fresh
+  // Opponent plays go through one serialized queue: each batch carries the
+  // cards spent, the board as it looked BEFORE the plays, and its arrival
+  // time. While the queue is non-empty the overlay shows every queued
+  // card, and the board keeps drawing the oldest batch's pre-play state;
+  // batches expire in order, 3s after their own arrival (so the board is
+  // never more than ~3s behind, however fast the opponent plays), and each
+  // expiry advances the drawn board by exactly one play — animated below.
+  interface RevealBatch {
+    cards: string[]
+    before: BoardSnap
+    at: number
+  }
+  const [queue, setQueue] = useState<RevealBatch[]>([])
+  // Enqueued during render (the "adjust state when props change" pattern),
+  // so no frame ever paints the post-play board before the hold applies.
+  const [tracked, setTracked] = useState({
+    len: history.length,
+    board: { bridges: obs.bridges, control: obs.control } as BoardSnap,
+  })
+  if (tracked.len !== history.length) {
+    const cards = history
+      .slice(tracked.len)
       .filter((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove'))
       .flatMap((h) => h.meta.spend as string[])
     if (cards.length > 0) {
-      const snap = prevBoard.current
-      setRevealed((prev) => [...prev, ...cards])
-      setHeldBoards((prev) => [...prev, snap])
-      // Batches expire FIFO, so dropping from the front removes exactly
-      // this one (and its board snapshot).
-      setTimeout(() => {
-        setRevealed((prev) => prev.slice(cards.length))
-        setHeldBoards((prev) => prev.slice(1))
-      }, 3000)
+      const batch = { cards, before: tracked.board, at: Date.now() }
+      setQueue((q) => [...q, batch])
     }
-    prevBoard.current = { bridges: obs.bridges, control: obs.control }
-    // obs travels with history in the same envelope.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [history, seat])
+    setTracked({ len: history.length, board: { bridges: obs.bridges, control: obs.control } })
+  }
+  useEffect(() => {
+    if (queue.length === 0) return
+    const t = setTimeout(
+      () => setQueue((q) => q.slice(1)),
+      Math.max(0, queue[0].at + 3000 - Date.now()),
+    )
+    return () => clearTimeout(t)
+  }, [queue])
+  const revealed = queue.flatMap((b) => b.cards)
   // Selection logic keeps using the live obs; only the drawing is held back.
-  const shownBoard = heldBoards[0] ?? { bridges: obs.bridges, control: obs.control }
+  const shownBoard = queue[0]?.before ?? { bridges: obs.bridges, control: obs.control }
+
+  // Animate what just changed on the drawn board, so a play (or your own
+  // move's cascade) is trackable: new bridges grow in, removed ones fade
+  // out as ghosts. Island recolors are a plain CSS transition. Merged, not
+  // replaced: a batch landing must not cut short the previous animation.
+  const [bridgeAnim, setBridgeAnim] = useState<{
+    added: number[]
+    removed: { pos: number; owner: number }[]
+  }>({ added: [], removed: [] })
+  const shownSig = shownBoard.bridges.map((b) => (b === null ? '.' : b)).join('')
+  const prevShown = useRef(shownBoard)
+  useLayoutEffect(() => {
+    const prev = prevShown.current
+    prevShown.current = shownBoard
+    const added: number[] = []
+    const removed: { pos: number; owner: number }[] = []
+    shownBoard.bridges.forEach((b, pos) => {
+      const before = prev.bridges[pos]
+      if (before === null && b !== null) added.push(pos)
+      else if (before !== null && b === null) removed.push({ pos, owner: before })
+    })
+    if (added.length === 0 && removed.length === 0) return
+    setBridgeAnim((prev) => ({
+      added: [...prev.added, ...added],
+      removed: [...prev.removed.filter((r) => !added.includes(r.pos)), ...removed],
+    }))
+    const t = setTimeout(() => setBridgeAnim({ added: [], removed: [] }), 700)
+    return () => clearTimeout(t)
+    // The signature captures exactly the changes this effect reacts to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownSig])
 
   // A scoring pause: when a round scores, float the round's points and the
   // running total over the board for a while.
@@ -393,7 +432,14 @@ export function KahunaBoard({
                   className={selected ? 'bridge active selected' : active ? 'bridge active' : 'bridge'}
                   onClick={active ? () => toggleBridge(pos) : undefined}
                 >
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} {...base} />
+                  <line
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    className={bridgeAnim.added.includes(pos) ? 'bridge-in' : undefined}
+                    {...base}
+                  />
                   {owner !== null && active && (
                     // Marked (or markable) for demolition.
                     <line
@@ -409,6 +455,24 @@ export function KahunaBoard({
                   )}
                   {active && <line x1={x1} y1={y1} x2={x2} y2={y2} className="bridge-hit" />}
                 </g>
+              )
+            })}
+            {bridgeAnim.removed.map(({ pos, owner }) => {
+              const [a, b] = bridges[pos]
+              const [x1, y1] = POS[a]
+              const [x2, y2] = POS[b]
+              return (
+                // A just-removed bridge fades out over the dashed route.
+                <line
+                  key={`out-${pos}`}
+                  className="bridge-out"
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={SEAT_COLOR[owner]}
+                  strokeWidth={5}
+                />
               )
             })}
             {islands.map((island) => {
