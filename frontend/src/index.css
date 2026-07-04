@@ -306,7 +306,7 @@ input {
 /* Kahuna */
 .kahuna {
   display: grid;
-  gap: 1rem;
+  gap: 0.8rem;
 }
 
 .kahuna-status {
@@ -587,7 +587,7 @@ button.pile:disabled {
 .kahuna-supply {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.8rem;
 }
 
 .pile {
@@ -635,7 +635,7 @@ button.pile:disabled {
   }
 
   .kahuna {
-    gap: 0.6rem;
+    gap: 0.4rem;
   }
 
   .kahuna h3 {
@@ -648,7 +648,7 @@ button.pile:disabled {
   }
 
   .kahuna-board-row {
-    gap: 0.6rem;
+    gap: 0.2rem;
   }
 
   .kahuna-svg {
@@ -663,7 +663,7 @@ button.pile:disabled {
 
   .kahuna-cards {
     gap: 0.4rem;
-    min-height: 78px;
+    min-height: 74px;
   }
 
   .pile {
@@ -687,7 +687,7 @@ button.pile:disabled {
   .kahuna-supply {
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 0.6rem;
+    gap: 0.2rem 0.6rem;
   }
 
   /* Draw/discard sections take their width from the pile, not from
