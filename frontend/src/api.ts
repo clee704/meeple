@@ -42,6 +42,10 @@ export async function createMatch(gameId: string, seat = 0): Promise<Session> {
     '/api/matches',
     { game_id: gameId, seat },
   )
+  // A server that predates the seat field ignores it and seats you at 0.
+  // Refuse to enter the match in the wrong color — fail loudly instead.
+  if (r.seat !== seat)
+    throw new ApiError(0, `server seated you at seat ${r.seat}, not ${seat} — restart the server (it's running an older build) and try again`)
   return { matchId: r.match_id, gameId: r.game_id, seat: r.seat, token: r.token, joinCode: r.join_code }
 }
 
