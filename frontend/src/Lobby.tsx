@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createMatch, joinMatch, listGames } from './api'
+import { seatNames } from './games/registry'
+import { playSound } from './sound'
 import type { GameInfo, Session } from './types'
 
 export function Lobby({ onEnter, onError }: { onEnter: (s: Session) => void; onError: (msg: string) => void }) {
@@ -10,9 +12,11 @@ export function Lobby({ onEnter, onError }: { onEnter: (s: Session) => void; onE
     listGames().then(setGames, (e) => onError(String(e)))
   }, [onError])
 
-  const create = async (gameId: string) => {
+  const create = async (gameId: string, seat = 0) => {
     try {
-      onEnter(await createMatch(gameId))
+      const session = await createMatch(gameId, seat)
+      playSound('created')
+      onEnter(session)
     } catch (e) {
       onError(String(e))
     }
@@ -31,11 +35,31 @@ export function Lobby({ onEnter, onError }: { onEnter: (s: Session) => void; onE
       <h1>MeepleMind</h1>
       <h2>Start a match</h2>
       <div className="game-list">
-        {games.map((g) => (
-          <button key={g.game_id} onClick={() => create(g.game_id)}>
-            {g.game_id} <span className="dim">({g.num_players}p)</span>
-          </button>
-        ))}
+        {games.map((g) => {
+          const names = seatNames[g.game_id]
+          if (!names) {
+            return (
+              <button key={g.game_id} onClick={() => create(g.game_id)}>
+                {g.game_id} <span className="dim">({g.num_players}p)</span>
+              </button>
+            )
+          }
+          // Named seats: one button per seat, seat 0 (the first mover) first.
+          return (
+            <div key={g.game_id} className="game-entry">
+              <span>
+                {g.game_id} <span className="dim">({g.num_players}p)</span>
+              </span>
+              {names.map((name, seat) => (
+                <button key={seat} onClick={() => create(g.game_id, seat)}>
+                  <span className="seat-swatch" style={{ background: `var(--p${seat})` }} />
+                  {name}
+                  {seat === 0 && <span className="dim"> · moves first</span>}
+                </button>
+              ))}
+            </div>
+          )
+        })}
       </div>
       <h2>Join a match</h2>
       <form

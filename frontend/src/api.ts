@@ -37,10 +37,10 @@ export function listGames(): Promise<GameInfo[]> {
   return request('/api/games')
 }
 
-export async function createMatch(gameId: string): Promise<Session> {
+export async function createMatch(gameId: string, seat = 0): Promise<Session> {
   const r = await post<{ match_id: string; game_id: string; seat: number; token: string; join_code: string }>(
     '/api/matches',
-    { game_id: gameId },
+    { game_id: gameId, seat },
   )
   return { matchId: r.match_id, gameId: r.game_id, seat: r.seat, token: r.token, joinCode: r.join_code }
 }

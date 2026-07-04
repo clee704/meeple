@@ -111,6 +111,29 @@ input {
   flex-wrap: wrap;
 }
 
+/* One line per game: its name, then a create button per named seat. */
+.game-list {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.game-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.seat-swatch {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  margin-right: 0.4em;
+  vertical-align: -0.05em;
+}
+
 .lobby form {
   display: flex;
   gap: 0.5rem;
