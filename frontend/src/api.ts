@@ -72,19 +72,27 @@ export function leaveMatch(session: Session): Promise<Envelope> {
   return post(`/api/matches/${session.matchId}/leave`, undefined, session.token)
 }
 
-// The session survives a refresh (and an accidental tab close) so a LAN
-// match isn't orphaned by one, but only one match at a time per browser.
+// The active session is tab-scoped (sessionStorage, survives a refresh) so
+// two tabs of one browser can hold two different seats — e.g. the creator's
+// tab stays White when a join link is opened in another tab. localStorage
+// keeps the latest copy as a fallback so a freshly opened tab can resume a
+// match after an accidental tab close.
 const SESSION_KEY = 'meeple.session'
 
 export function loadSession(): Session | null {
-  const raw = localStorage.getItem(SESSION_KEY)
+  const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY)
   return raw ? (JSON.parse(raw) as Session) : null
 }
 
 export function saveSession(session: Session): void {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  const raw = JSON.stringify(session)
+  sessionStorage.setItem(SESSION_KEY, raw)
+  localStorage.setItem(SESSION_KEY, raw)
 }
 
 export function clearSession(): void {
-  localStorage.removeItem(SESSION_KEY)
+  const own = sessionStorage.getItem(SESSION_KEY)
+  sessionStorage.removeItem(SESSION_KEY)
+  // Leave the shared fallback copy alone if another tab wrote it since.
+  if (own === null || localStorage.getItem(SESSION_KEY) === own) localStorage.removeItem(SESSION_KEY)
 }
