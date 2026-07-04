@@ -96,6 +96,13 @@ def test_join_assigns_seat_1_then_match_is_full(client):
     assert client.post("/api/matches/join", json={"join_code": "XXXXX"}).status_code == 404
 
 
+def test_unknown_request_fields_are_rejected(client):
+    # Version-skew guard: a server that doesn't know a field must say so
+    # (422), not silently drop it (e.g. an old server ignoring `seat`).
+    resp = client.post("/api/matches", json={"game_id": "kahuna", "bogus": 1})
+    assert resp.status_code == 422
+
+
 def test_creator_can_pick_their_seat(client):
     created = _create(client, game_id="kahuna", seat=1)
     assert created["seat"] == 1
