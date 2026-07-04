@@ -189,6 +189,36 @@ input {
   white-space: nowrap;
 }
 
+/* Game-supplied HUD status (e.g. Kahuna score / round): inline in the bar on
+   wide screens, moved into the kebab menu on phones so the bar never wraps. */
+.hud-extras {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.menu-extras {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .hud-extras {
+    display: none;
+  }
+
+  .menu-extras {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.5rem;
+    padding: 0.35rem 0.7rem 0.55rem;
+    margin-bottom: 0.2rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.9rem;
+  }
+}
+
 .hud-join {
   font-size: 0.85rem;
   margin-top: 0.25rem;
@@ -307,13 +337,6 @@ input {
 .kahuna {
   display: grid;
   gap: 0.8rem;
-}
-
-.kahuna-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  font-size: 0.9rem;
 }
 
 /* Score chip in your seat's bridge color — readable even when that
@@ -614,16 +637,58 @@ button.pile:disabled {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
-.kahuna-confirm {
+.kahuna-actions {
   margin-top: 0.7rem;
   align-items: center;
 }
 
-.kahuna-log {
+/* Log: one truncated line by default (the latest move); tapping it opens the
+   full, scrollable history in an overlay. */
+.kahuna-log-bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.kahuna-log-bar h3 {
+  margin: 0;
+}
+
+.kahuna-log-line {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--dim);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kahuna-log-line:disabled {
+  opacity: 1;
+}
+
+.kahuna-log-modal {
+  max-width: 30rem;
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.kahuna-log-full {
   margin: 0;
   padding-left: 1.1rem;
-  font-size: 0.85rem;
-  color: var(--dim);
+  overflow-y: auto;
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: var(--ink);
 }
 
 /* Phones (portrait): tighter chrome, smaller cards, supply piles in one
@@ -671,14 +736,28 @@ button.pile:disabled {
     height: 78px;
   }
 
-  /* The opponent's hand only conveys its size — shrink it. */
+  /* The opponent's hand only conveys its size — label and the (tiny,
+     token-sized) card backs sit on one line to reclaim vertical space. */
+  .kahuna-opp-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .kahuna-opp-row h3 {
+    margin: 0;
+  }
+
   .kahuna-opp .card {
-    width: 34px;
-    height: 48px;
+    width: 15px;
+    height: 21px;
+    border-width: 1px;
+    border-radius: 3px;
   }
 
   .kahuna-opp.kahuna-cards {
-    min-height: 52px;
+    min-height: 0;
+    gap: 0.15rem;
   }
 
   /* Face-up, draw and discard side by side instead of a tall column;
@@ -694,12 +773,6 @@ button.pile:disabled {
      their headers — long headers wrap instead. */
   .kahuna-supply > div + div {
     flex: 0 1 min-content;
-  }
-
-  /* Draw/Skip get their own full-width line under the piles. */
-  .kahuna-supply > .kahuna-draw-actions {
-    flex: 0 0 100%;
-    order: 4;
   }
 }
 

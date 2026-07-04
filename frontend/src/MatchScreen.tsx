@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError, getState, leaveMatch, postAction } from './api'
 import { useConfirm } from './Confirm'
 import { renderers } from './games/registry'
@@ -17,7 +17,13 @@ function formatClock(seconds: number): string {
 
 // Kebab (⋮) dropdown anchored to the HUD's top-right corner, for actions
 // that shouldn't sit as bare buttons in the chrome (e.g. quitting).
-function Menu({ items }: { items: { label: string; danger?: boolean; onClick: () => void }[] }) {
+function Menu({
+  items,
+  extras,
+}: {
+  items: { label: string; danger?: boolean; onClick: () => void }[]
+  extras?: ReactNode
+}) {
   const [open, setOpen] = useState(false)
   return (
     <div className="menu">
@@ -34,6 +40,9 @@ function Menu({ items }: { items: { label: string; danger?: boolean; onClick: ()
         <>
           <div className="menu-backdrop" onClick={() => setOpen(false)} />
           <div className="menu-pop" role="menu">
+            {/* Shown only on narrow screens, where the HUD tucks its status
+                (score / round) in here rather than wrapping the bar. */}
+            {extras && <div className="menu-extras">{extras}</div>}
             {items.map(({ label, danger, onClick }) => (
               <button
                 key={label}
@@ -59,6 +68,7 @@ function Hud({
   clock,
   turnClock,
   session,
+  extras,
   onExit,
   onQuit,
 }: {
@@ -66,6 +76,7 @@ function Hud({
   clock: string
   turnClock: string
   session: Session
+  extras: ReactNode
   onExit: () => void
   onQuit: () => void
 }) {
@@ -88,6 +99,7 @@ function Hud({
       <header className="hud">
         <strong className="hud-verdict">{verdict}</strong>
         <div className="hud-right">
+          {extras && <span className="hud-extras">{extras}</span>}
           {matchClock}
           <button className="primary" onClick={onExit}>
             Back to lobby
@@ -117,8 +129,9 @@ function Hud({
         {env.your_turn ? 'Your turn' : "Opponent's turn"} · {turnClock}
       </span>
       <div className="hud-right">
+        {extras && <span className="hud-extras">{extras}</span>}
         {matchClock}
-        <Menu items={[{ label: 'Quit match', danger: true, onClick: onQuit }]} />
+        <Menu items={[{ label: 'Quit match', danger: true, onClick: onQuit }]} extras={extras} />
       </div>
     </header>
   )
@@ -135,6 +148,7 @@ export function MatchScreen({
 }) {
   const [env, setEnv] = useState<Envelope | null>(null)
   const [meta, setMeta] = useState<Record<string, unknown>>({})
+  const [hudExtras, setHudExtras] = useState<ReactNode>(null)
   const [confirmDialog, ask] = useConfirm()
   const envRef = useRef<Envelope | null>(null)
   const absorbedAtRef = useRef(Date.now())
@@ -242,6 +256,7 @@ export function MatchScreen({
         clock={formatClock(elapsed)}
         turnClock={formatClock(turnElapsed)}
         session={session}
+        extras={hudExtras}
         onExit={onExit}
         onQuit={quit}
       />
@@ -255,6 +270,7 @@ export function MatchScreen({
           history={env.history}
           result={env.result}
           submitAction={submitAction}
+          reportHud={setHudExtras}
         />
       ) : (
         <p>

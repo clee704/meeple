@@ -118,6 +118,7 @@ export function KahunaBoard({
   history,
   result,
   submitAction,
+  reportHud,
 }: GameRendererProps) {
   const obs = observation as unknown as KahunaObservation
   const { islands, bridges } = meta as unknown as KahunaMeta
@@ -131,6 +132,7 @@ export function KahunaBoard({
   // the turn by accident.
   const [drawSel, setDrawSel] = useState<number | 'blind' | null>(null)
   const [busy, setBusy] = useState(false) // an action (or batch) is in flight
+  const [logOpen, setLogOpen] = useState(false) // full-history overlay
   const [confirmDialog, ask] = useConfirm()
 
   useEffect(() => {
@@ -259,13 +261,6 @@ export function KahunaBoard({
     endTurn(la)
   }
 
-  const nPlace = selBridges.filter((p) => obs.bridges[p] === null).length
-  const nRemove = selBridges.length - nPlace
-  const parts = []
-  if (nPlace) parts.push(`build ${nPlace}`)
-  if (nRemove) parts.push(`remove ${nRemove}`)
-  const commitLabel = parts.length ? `Confirm: ${parts.join(' + ')}` : 'Confirm'
-
   const drawBlind = byKind('draw_blind')[0]
   const skip = byKind('skip')[0]
   const drawAction =
@@ -278,15 +273,33 @@ export function KahunaBoard({
   const discardCount =
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
 
-  // Opponent plays go through one serialized queue, one entry per play:
-  // the cards it spent and the board as it looked BEFORE that poll's
-  // plays. Only the head entry's overlay shows, for a full 3s from the
-  // moment it reaches the head — plays are announced strictly one at a
-  // time, in order, however fast the opponent submitted them. The board
-  // keeps drawing the head's pre-play state; intermediate boards within
-  // one poll aren't reconstructable without game logic, so plays that
-  // arrived together animate onto the board as one step once the last of
-  // them has been announced.
+  // The three always-live buttons on your turn (Play / Draw / Skip). Each is
+  // enabled and, when nothing's selected to act on, says what's missing
+  // rather than sitting disabled.
+  const play = () => {
+    if (selCards.length === 0)
+      return void ask('Pick a card from your hand first, then the lines or bridges it pays for.', { alert: true })
+    if (!plan) return void ask('Pick the lines or bridges these cards pay for.', { alert: true })
+    commit()
+  }
+  const drawOrPrompt = () => {
+    if (!drawAction) return void ask('Pick a face-up card or the draw pile first.', { alert: true })
+    draw(drawAction)
+  }
+  const skipTurn = () => {
+    if (!skip) return void ask("You can't skip right now.", { alert: true })
+    skipDraw(skip)
+  }
+
+  // Opponent plays go through one serialized queue, one entry per update
+  // (poll). A play is the whole set of cards committed together, so every
+  // place/remove card seen in a single update is ONE entry — not one per
+  // card or per bridge. Each entry carries those cards and the board as it
+  // looked BEFORE them. Only the head entry's overlay shows, for a full 3s
+  // from the moment it reaches the head, so successive plays are announced
+  // strictly one at a time in order (a later play can't bleed into an
+  // earlier one's overlay). The board holds the head's pre-play state and
+  // animates that whole play's board changes as one step when it clears.
   interface Reveal {
     cards: string[]
     before: BoardSnap
@@ -300,13 +313,12 @@ export function KahunaBoard({
     board: { bridges: obs.bridges, control: obs.control } as BoardSnap,
   })
   if (tracked.len !== history.length) {
-    const plays = history
+    const cards = history
       .slice(tracked.len)
       .filter((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove'))
-    if (plays.length > 0) {
-      const before = tracked.board
-      const entries = plays.map((h) => ({ cards: h.meta.spend as string[], before, shownAt: Date.now() }))
-      setQueue((q) => [...q, ...entries])
+      .flatMap((h) => h.meta.spend as string[])
+    if (cards.length > 0) {
+      setQueue((q) => [...q, { cards, before: tracked.board, shownAt: Date.now() }])
     }
     setTracked({ len: history.length, board: { bridges: obs.bridges, control: obs.control } })
   }
@@ -465,31 +477,30 @@ export function KahunaBoard({
     return () => ro.disconnect()
   }, [])
 
+  // Contribute score / round to the shell's HUD (item 1); on phones the shell
+  // tucks these into the kebab menu rather than wrapping the bar.
+  const myScore = obs.scores[seat]
+  const theirScore = obs.scores[1 - seat]
+  const finalTurns = obs.final_turns_remaining
+  useEffect(() => {
+    reportHud?.(
+      <>
+        <b className="seat-pill" style={{ background: SEAT_COLOR[seat], color: SEAT_LABEL[seat] }}>
+          you {myScore}
+        </b>
+        <b className="seat-pill" style={{ background: SEAT_COLOR[1 - seat], color: SEAT_LABEL[1 - seat] }}>
+          them {theirScore}
+        </b>
+        <span>Round {round}</span>
+        {finalTurns !== null && <span className="dim">Final turns: {finalTurns}</span>}
+      </>,
+    )
+    return () => reportHud?.(null)
+  }, [reportHud, seat, round, myScore, theirScore, finalTurns])
+
   return (
     <div className="kahuna">
-      <div className="kahuna-status">
-        <span>
-          Scores:{' '}
-          <b
-            className="seat-pill"
-            style={{ background: SEAT_COLOR[seat], color: SEAT_LABEL[seat] }}
-          >
-            you {obs.scores[seat]}
-          </b>{' '}
-          <b
-            className="seat-pill"
-            style={{ background: SEAT_COLOR[1 - seat], color: SEAT_LABEL[1 - seat] }}
-          >
-            them {obs.scores[1 - seat]}
-          </b>
-        </span>
-        <span>Round {round}</span>
-        {obs.final_turns_remaining !== null && (
-          <span className="dim">Final turns: {obs.final_turns_remaining}</span>
-        )}
-      </div>
-
-      <div>
+      <div className="kahuna-opp-row">
         <h3>Opponent's hand</h3>
         <div className="kahuna-cards kahuna-opp">
           {Array.from({ length: obs.opponent_hand_count }, (_, i) =>
@@ -684,16 +695,6 @@ export function KahunaBoard({
               {cardStack(obs.pile_count, () => 'card facedown')}
             </button>
           </div>
-          {/* Always rendered so nothing shifts; Draw arms only once a
-              face-up card or the pile is selected. */}
-          <div className="action-row kahuna-draw-actions">
-            <button className="primary" disabled={!drawAction || busy} onClick={() => draw(drawAction)}>
-              Draw
-            </button>
-            <button disabled={!skip || busy} onClick={() => skipDraw(skip)}>
-              Skip
-            </button>
-          </div>
           <div>
             <h3>Discard ({discardCount})</h3>
             <div className="pile">{cardStack(discardCount, () => 'card facedown')}</div>
@@ -723,30 +724,60 @@ export function KahunaBoard({
           ))}
           {obs.hand.length === 0 && <span className="card empty"></span>}
         </div>
-        {yourTurn && selCards.length > 0 && (
-          <div className="action-row kahuna-confirm">
-            <button className="primary" disabled={!plan || busy} onClick={commit}>
-              {commitLabel}
+        {yourTurn && (
+          <div className="action-row kahuna-actions">
+            <button disabled={busy} onClick={play}>
+              Play
             </button>
-            {canDiscard && <button onClick={discard}>Discard</button>}
-            <button onClick={() => { playSound('deselect'); setSelCards([]); setSelBridges([]) }}>
-              Clear
+            <button disabled={busy} onClick={drawOrPrompt}>
+              Draw
             </button>
-            {!plan && (
-              <span className="dim">select lines/bridges that spend every selected card</span>
+            <button disabled={busy} onClick={skipTurn}>
+              Skip
+            </button>
+            {canDiscard && (
+              <button disabled={busy} onClick={discard}>
+                Discard
+              </button>
             )}
           </div>
         )}
       </div>
 
-      <div>
+      <div className="kahuna-log-bar">
         <h3>Log</h3>
-        <ul className="kahuna-log">
-          {[...history].reverse().map((h, i) => (
-            <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
-          ))}
-        </ul>
+        <button
+          className="kahuna-log-line"
+          disabled={history.length === 0}
+          onClick={() => setLogOpen(true)}
+        >
+          {history.length > 0 ? historyLine(history[history.length - 1], seat) : 'No moves yet'}
+        </button>
       </div>
+
+      {logOpen && (
+        <div className="modal-backdrop" onClick={() => setLogOpen(false)}>
+          <div
+            className="modal kahuna-log-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Move log"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3>Log</h3>
+            <ul className="kahuna-log-full">
+              {[...history].reverse().map((h, i) => (
+                <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
+              ))}
+            </ul>
+            <div className="action-row modal-actions">
+              <button className="primary" onClick={() => setLogOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {confirmDialog}
     </div>
   )

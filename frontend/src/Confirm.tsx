@@ -3,6 +3,9 @@ import { useEffect, useState, type ReactNode } from 'react'
 interface Options {
   confirmLabel?: string
   danger?: boolean
+  // An alert: a single dismiss button, no Cancel (for "you must pick a card
+  // first"-style notices where there's nothing to decline).
+  alert?: boolean
 }
 
 interface Pending extends Required<Options> {
@@ -21,7 +24,13 @@ export function useConfirm(): [
 
   const ask = (message: string, opts: Options = {}) =>
     new Promise<boolean>((resolve) => {
-      setPending({ message, confirmLabel: opts.confirmLabel ?? 'OK', danger: opts.danger ?? false, resolve })
+      setPending({
+        message,
+        confirmLabel: opts.confirmLabel ?? 'OK',
+        danger: opts.danger ?? false,
+        alert: opts.alert ?? false,
+        resolve,
+      })
     })
 
   const close = (ok: boolean) => {
@@ -46,7 +55,7 @@ export function useConfirm(): [
       <div className="modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <p>{pending.message}</p>
         <div className="action-row modal-actions">
-          <button onClick={() => close(false)}>Cancel</button>
+          {!pending.alert && <button onClick={() => close(false)}>Cancel</button>}
           <button
             className={pending.danger ? 'danger' : 'primary'}
             autoFocus

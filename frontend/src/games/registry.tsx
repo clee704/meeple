@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 import type { HistoryEntry, LegalAction } from '../types'
 import { KahunaBoard } from './KahunaBoard'
 import { KuhnBoard } from './KuhnBoard'
@@ -17,6 +17,11 @@ export interface GameRendererProps {
   history: HistoryEntry[]
   result: Record<string, unknown> | null
   submitAction: (action: number) => Promise<boolean>
+  // Optional: hand the shell a node to show in the match HUD (e.g. score /
+  // round). Generic — the shell never inspects it; it just slots it into the
+  // header on wide screens and the kebab menu on narrow ones. Pass null to
+  // clear. A renderer that has nothing to add simply never calls it.
+  reportHud?: (node: ReactNode) => void
 }
 
 export const renderers: Record<string, ComponentType<GameRendererProps>> = {
