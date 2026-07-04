@@ -51,14 +51,16 @@ def create_app() -> FastAPI:
     @app.post("/api/matches", status_code=201)
     async def create_match(req: CreateMatchRequest) -> dict:
         try:
-            match, token = store.create(req.game_id, req.seed)
+            match, token = store.create(req.game_id, req.seed, req.seat)
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from None
+        except ValueError as e:  # seat out of range for this game
+            raise HTTPException(status_code=422, detail=str(e)) from None
         return {
             "match_id": match.match_id,
             "join_code": match.join_code,
             "game_id": match.game_id,
-            "seat": 0,
+            "seat": req.seat,
             "token": token,
         }
 

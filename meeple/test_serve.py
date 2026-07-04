@@ -17,8 +17,8 @@ def client():
     return TestClient(create_app())
 
 
-def _create(client, game_id="kuhn", seed=7):
-    resp = client.post("/api/matches", json={"game_id": game_id, "seed": seed})
+def _create(client, game_id="kuhn", seed=7, **body):
+    resp = client.post("/api/matches", json={"game_id": game_id, "seed": seed, **body})
     assert resp.status_code == 201
     return resp.json()
 
@@ -94,6 +94,14 @@ def test_join_assigns_seat_1_then_match_is_full(client):
         == 409
     )
     assert client.post("/api/matches/join", json={"join_code": "XXXXX"}).status_code == 404
+
+
+def test_creator_can_pick_their_seat(client):
+    created = _create(client, game_id="kahuna", seat=1)
+    assert created["seat"] == 1
+    assert _join(client, created["join_code"])["seat"] == 0
+    resp = client.post("/api/matches", json={"game_id": "kahuna", "seat": 2})
+    assert resp.status_code == 422
 
 
 def test_history_names_the_faceup_card_taken(client):

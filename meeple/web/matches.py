@@ -162,13 +162,18 @@ class MatchStore:
     _matches: dict[str, Match] = field(default_factory=dict)
     _by_code: dict[str, str] = field(default_factory=dict)
 
-    def create(self, game_id: str, seed: int | None = None) -> tuple[Match, str]:
+    def create(
+        self, game_id: str, seed: int | None = None, creator_seat: int = 0
+    ) -> tuple[Match, str]:
         view = registry.make_view(game_id)  # KeyError for games without a web view
         game = registry.make(game_id)
         rng = random.Random(secrets.randbits(64) if seed is None else seed)
         num_players = game.spec().num_players
+        if not 0 <= creator_seat < num_players:
+            raise ValueError(f"seat must be in 0..{num_players - 1}, got {creator_seat}")
         token = secrets.token_urlsafe(16)
-        tokens: list[str | None] = [token] + [None] * (num_players - 1)
+        tokens: list[str | None] = [None] * num_players
+        tokens[creator_seat] = token
         match = Match(
             match_id=secrets.token_urlsafe(9),
             join_code=self._new_join_code(),
