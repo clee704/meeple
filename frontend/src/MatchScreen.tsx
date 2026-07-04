@@ -123,9 +123,20 @@ function Hud({
       </header>
     )
   }
+  // The turn pill wears the active player's seat color, so your own color is
+  // the thing that lights up when it's your move (and the opponent's when
+  // it's theirs) — seat 0 is --p0, seat 1 is --p1.
+  const activeSeat = env.your_turn ? env.seat : 1 - env.seat
   return (
     <header className="hud">
-      <span className={env.your_turn ? 'hud-turn you' : 'hud-turn'}>
+      <span
+        className="hud-turn"
+        style={{
+          background: `var(--p${activeSeat})`,
+          color: `var(--p${activeSeat}-ink)`,
+          borderColor: 'var(--ink)',
+        }}
+      >
         {env.your_turn ? 'Your turn' : "Opponent's turn"} · {turnClock}
       </span>
       <div className="hud-right">

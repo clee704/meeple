@@ -490,28 +490,26 @@ export function KahunaBoard({
 
   // Contribute score / round to the shell's HUD (item 1); on phones the shell
   // tucks these into the kebab menu rather than wrapping the bar.
-  const myScore = obs.scores[seat]
-  const theirScore = obs.scores[1 - seat]
+  const black = obs.scores[0]
+  const white = obs.scores[1]
   const finalTurns = obs.final_turns_remaining
   useEffect(() => {
     reportHud?.(
       <>
-        {/* Two seat-colored scores; yours carries an accent ring (no "you"
-            / "them" text) so your own color reads at a glance. */}
-        <span className="score-pair">
-          <b className="seat-pill you" style={{ background: SEAT_COLOR[seat], color: SEAT_LABEL[seat] }}>
-            {myScore}
-          </b>
-          <b className="seat-pill" style={{ background: SEAT_COLOR[1 - seat], color: SEAT_LABEL[1 - seat] }}>
-            {theirScore}
-          </b>
+        {/* Plain text, Black (seat 0) always first; your own score is bold.
+            En-dash (not ":") so it doesn't read like the clock. Which color
+            is yours is conveyed by the turn pill, not here. */}
+        <span className="score-line">
+          Score{' '}
+          <span className={seat === 0 ? 'me' : undefined}>{black}</span>–
+          <span className={seat === 1 ? 'me' : undefined}>{white}</span>
         </span>
         <span>Round {round}</span>
         {finalTurns !== null && <span className="dim">Final turns: {finalTurns}</span>}
       </>,
     )
     return () => reportHud?.(null)
-  }, [reportHud, seat, round, myScore, theirScore, finalTurns])
+  }, [reportHud, seat, round, black, white, finalTurns])
 
   return (
     <div className="kahuna">

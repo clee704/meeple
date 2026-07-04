@@ -165,12 +165,8 @@ input {
   border: 1px solid var(--line);
   color: var(--dim);
   font-weight: 600;
-}
-
-.hud-turn.you {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  /* background / text / border colors are set inline per whose turn it is
+     (the active player's seat color). */
 }
 
 .hud-verdict {
@@ -339,25 +335,13 @@ input {
   gap: 0.8rem;
 }
 
-/* Score chip in your seat's bridge color — readable even when that
-   color matches the page background (white). */
-.seat-pill {
-  padding: 0.05rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid var(--ink);
+/* Plain-text score "Score 3–1" (Black first); your own number is bold. */
+.score-line {
+  white-space: nowrap;
+}
+
+.score-line .me {
   font-weight: 700;
-}
-
-.score-pair {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-/* Your own score, ringed in the accent so your color reads at a glance —
-   replaces the old "you" / "them" text labels. */
-.seat-pill.you {
-  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .kahuna-svg {
@@ -712,7 +696,7 @@ button.pile:disabled {
   }
 
   .kahuna {
-    gap: 0.4rem;
+    gap: 0.5rem;
   }
 
   .kahuna h3 {
@@ -778,7 +762,9 @@ button.pile:disabled {
   .kahuna-supply {
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 0.2rem 0.6rem;
+    gap: 0.2rem 1rem;
+    justify-content: space-between;
+    width: 100%;
   }
 
   /* Draw/discard sections take their width from the pile, not from
@@ -820,5 +806,8 @@ button.pile:disabled {
   .kahuna-board-wrap,
   .card {
     font-size: 0.9rem;
+  }
+  .action-row {
+    gap: 0.3rem;
   }
 }
