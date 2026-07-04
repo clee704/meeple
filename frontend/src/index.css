@@ -335,13 +335,9 @@ input {
   gap: 0.8rem;
 }
 
-/* Plain-text score "Score 3–1" (Black first); your own number is bold. */
+/* Plain-text score "Score 3–1" (Black first, no emphasis). */
 .score-line {
   white-space: nowrap;
-}
-
-.score-line .me {
-  font-weight: 700;
 }
 
 .kahuna-svg {

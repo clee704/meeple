@@ -496,20 +496,18 @@ export function KahunaBoard({
   useEffect(() => {
     reportHud?.(
       <>
-        {/* Plain text, Black (seat 0) always first; your own score is bold.
-            En-dash (not ":") so it doesn't read like the clock. Which color
-            is yours is conveyed by the turn pill, not here. */}
+        {/* Plain text, Black (seat 0) always first, no emphasis. En-dash
+            (not ":") so it doesn't read like the clock. Which side is you is
+            read from the turn pill's color. */}
         <span className="score-line">
-          Score{' '}
-          <span className={seat === 0 ? 'me' : undefined}>{black}</span>–
-          <span className={seat === 1 ? 'me' : undefined}>{white}</span>
+          Score {black}–{white}
         </span>
         <span>Round {round}</span>
         {finalTurns !== null && <span className="dim">Final turns: {finalTurns}</span>}
       </>,
     )
     return () => reportHud?.(null)
-  }, [reportHud, seat, round, black, white, finalTurns])
+  }, [reportHud, round, black, white, finalTurns])
 
   return (
     <div className="kahuna">
