@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, getState, leaveMatch, postAction } from './api'
 import { useConfirm } from './Confirm'
 import { renderers } from './games/registry'
+import { playSound } from './sound'
 import type { Envelope, Session } from './types'
 
 const POLL_MS = 1000
@@ -144,6 +145,16 @@ export function MatchScreen({
     setEnv(e)
     if (e.meta) setMeta(e.meta)
   }, [])
+
+  // Ding when the opponent joins — the creator is usually waiting in
+  // another tab or across the room. Only on the observed transition, so a
+  // reload of an in-progress match stays quiet.
+  const prevStatus = useRef(env?.status)
+  useEffect(() => {
+    const prev = prevStatus.current
+    prevStatus.current = env?.status
+    if (prev === 'waiting' && env?.status === 'in_progress') playSound('joined')
+  }, [env?.status])
 
   // The server's elapsed_seconds only refreshes when the state changes, so
   // tick locally once a second to keep the clock moving between polls.

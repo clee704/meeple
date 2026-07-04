@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useConfirm } from '../Confirm'
+import { playSound } from '../sound'
 import type { HistoryEntry, LegalAction } from '../types'
 import type { GameRendererProps } from './registry'
 import { matchSelection, payOptionsByBridge } from './kahunaSelect'
@@ -90,7 +91,10 @@ function historyLine(h: HistoryEntry, seat: number): string {
     case 'draw_blind':
       return `${who} drew from the draw pile`
     case 'take_faceup':
-      return `${who} took face-up card ${(m.slot as number) + 1}`
+      // The card is public — everyone saw the slot before it was taken.
+      return typeof m.card === 'string'
+        ? `${who} took ${m.card} from the face-up row`
+        : `${who} took face-up card ${(m.slot as number) + 1}`
     case 'skip':
       return `${who} skipped`
     case 'discard':
@@ -107,6 +111,7 @@ export function KahunaBoard({
   yourTurn,
   legalActions,
   history,
+  result,
   submitAction,
 }: GameRendererProps) {
   const obs = observation as unknown as KahunaObservation
@@ -147,12 +152,14 @@ export function KahunaBoard({
   const toggleCard = (i: number) => {
     setDrawSel(null)
     if (selCards.includes(i)) {
+      playSound('deselect')
       const next = selCards.filter((j) => j !== i)
       // Drop the board selection if the remaining cards can't pay for it.
       const names = next.map((j) => obs.hand[j])
       if (matchSelection(selOptions, names, false) === null) setSelBridges([])
       setSelCards(next)
     } else {
+      playSound('select')
       setSelCards([...selCards, i])
     }
   }
@@ -233,10 +240,15 @@ export function KahunaBoard({
   }
 
   // Skipping the draw is rare enough that a mishit is likelier than the
-  // real intent — always confirm.
+  // real intent — confirm, except when skip is the only legal move left
+  // (nothing to play, nothing to draw; happens in the final turns).
   const skipDraw = async (la: LegalAction | undefined) => {
     if (!la) return
-    if (!(await ask('Skip your draw? Your turn ends without taking a card.', { confirmLabel: 'Skip draw' })))
+    const forced = legalActions.length === 1
+    if (
+      !forced &&
+      !(await ask('Skip your draw? Your turn ends without taking a card.', { confirmLabel: 'Skip' }))
+    )
       return
     endTurn(la)
   }
@@ -302,6 +314,36 @@ export function KahunaBoard({
   // Selection logic keeps using the live obs; only the drawing is held back.
   const shownBoard = queue[0]?.before ?? { bridges: obs.bridges, control: obs.control }
 
+  // New history entries also drive sounds (both players' plays/discards)
+  // and the opponent-draw cue: a ghost of the taken card rising off its
+  // face-up slot (or a face-down ghost off the pile), plus the new card
+  // sliding into the opponent's hand — a draw is otherwise easy to miss.
+  const [oppDraw, setOppDraw] = useState<
+    { kind: 'blind'; at: number } | { kind: 'faceup'; slot: number; card: string; at: number } | null
+  >(null)
+  const heardLen = useRef(history.length)
+  useEffect(() => {
+    const added = history.slice(heardLen.current)
+    heardLen.current = history.length
+    if (added.length === 0) return
+    if (added.some((h) => h.meta.kind === 'place' || h.meta.kind === 'remove')) playSound('play')
+    if (added.some((h) => h.meta.kind === 'discard')) playSound('discard')
+    const draw = added.find(
+      (h) => h.actor !== seat && (h.meta.kind === 'draw_blind' || h.meta.kind === 'take_faceup'),
+    )
+    if (!draw) return
+    const at = Date.now()
+    const cue =
+      draw.meta.kind === 'draw_blind'
+        ? { kind: 'blind' as const, at }
+        : typeof draw.meta.card === 'string'
+          ? { kind: 'faceup' as const, slot: draw.meta.slot as number, card: draw.meta.card, at }
+          : null
+    if (!cue) return
+    setOppDraw(cue)
+    setTimeout(() => setOppDraw((cur) => (cur?.at === at ? null : cur)), 2000)
+  }, [history, seat])
+
   // Animate what just changed on the drawn board, so a play (or your own
   // move's cascade) is trackable: new bridges grow in, removed ones fade
   // out as ghosts. Island recolors are a plain CSS transition. Merged, not
@@ -334,24 +376,42 @@ export function KahunaBoard({
   }, [shownSig])
 
   // A scoring pause: when a round scores, float the round's points and the
-  // running total over the board for a while.
+  // running total over the board for a while. Rounds 1/2 score the moment
+  // the deck runs out (scoring_count flips), but round 3's flip merely
+  // starts the two final turns — its scoring only lands when the game
+  // ends, so the final overlay keys off `result` instead.
   const [roundScore, setRoundScore] = useState<{
     round: number
     delta: number[]
     total: number[]
   } | null>(null)
   const prevScore = useRef({ count: obs.scoring_count, scores: obs.scores })
+  const finalShown = useRef(result !== null) // reloading a finished game stays quiet
   useEffect(() => {
     const prev = prevScore.current
     prevScore.current = { count: obs.scoring_count, scores: obs.scores }
-    if (obs.scoring_count === prev.count) return
-    setRoundScore({
-      round: prev.count + 1,
-      delta: obs.scores.map((s, i) => s - prev.scores[i]),
-      total: obs.scores,
-    })
+    let scored: { round: number; delta: number[]; total: number[] } | null = null
+    if (result !== null && 'points' in result) {
+      // A real game end (a forfeit carries no points). Announce it once; a
+      // premature end (zero bridges) has no scoring to show — the HUD
+      // verdict covers it.
+      if (finalShown.current) return
+      finalShown.current = true
+      playSound('game-over')
+      if (result.premature) return
+      scored = { round: 3, delta: obs.scores.map((s, i) => s - prev.scores[i]), total: obs.scores }
+    } else if (obs.scoring_count !== prev.count && obs.scoring_count < 3) {
+      playSound('round')
+      scored = {
+        round: obs.scoring_count,
+        delta: obs.scores.map((s, i) => s - prev.scores[i]),
+        total: obs.scores,
+      }
+    }
+    if (!scored) return
+    setRoundScore(scored)
     setTimeout(() => setRoundScore(null), 6000)
-  }, [obs.scoring_count, obs.scores])
+  }, [obs.scoring_count, obs.scores, result])
 
   // Flag cards that just entered your hand — a blind draw is easy to miss.
   // Your hand is sorted, so the newcomer is found by multiset diff.
@@ -401,9 +461,14 @@ export function KahunaBoard({
       <div>
         <h3>Opponent's hand</h3>
         <div className="kahuna-cards kahuna-opp">
-          {Array.from({ length: obs.opponent_hand_count }, (_, i) => (
-            <span key={i} className="card facedown" />
-          ))}
+          {Array.from({ length: obs.opponent_hand_count }, (_, i) =>
+            oppDraw && i === obs.opponent_hand_count - 1 ? (
+              // The card the opponent just drew slides into their hand.
+              <span key={`drawn-${oppDraw.at}`} className="card facedown drawn-in" />
+            ) : (
+              <span key={i} className="card facedown" />
+            ),
+          )}
           {obs.opponent_hand_count === 0 && <span className="card empty"></span>}
         </div>
       </div>
@@ -505,7 +570,9 @@ export function KahunaBoard({
             <div className="kahuna-overlay">
               {roundScore && (
                 <div className="kahuna-overlay-panel">
-                  <span className="kahuna-overlay-label">Round {roundScore.round} scored</span>
+                  <span className="kahuna-overlay-label">
+                    {roundScore.round === 3 ? 'Final scoring' : `Round ${roundScore.round} scored`}
+                  </span>
                   <div className="kahuna-round-lines">
                     <span>
                       You +{roundScore.delta[seat]} · Opponent +{roundScore.delta[1 - seat]}
@@ -538,17 +605,29 @@ export function KahunaBoard({
             <div className="kahuna-cards">
               {obs.face_up.map((card, slot) => {
                 const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
-                if (card === null) return <span key={slot} className="card empty" />
+                const ghost = oppDraw?.kind === 'faceup' && oppDraw.slot === slot ? oppDraw : null
                 return (
-                  <button
-                    key={slot}
-                    className={drawSel === slot ? 'card selected' : 'card'}
-                    aria-pressed={drawSel === slot}
-                    disabled={!la}
-                    onClick={() => toggleDrawSel(slot)}
-                  >
-                    {card}
-                  </button>
+                  <span key={slot} className="slot">
+                    {card === null ? (
+                      <span className="card empty" />
+                    ) : (
+                      <button
+                        className={drawSel === slot ? 'card selected' : 'card'}
+                        aria-pressed={drawSel === slot}
+                        disabled={!la}
+                        onClick={() => toggleDrawSel(slot)}
+                      >
+                        {card}
+                      </button>
+                    )}
+                    {ghost && (
+                      // The card the opponent just took floats off its slot,
+                      // uncovering the refill underneath.
+                      <span key={ghost.at} className="card ghost-taken">
+                        {ghost.card}
+                      </span>
+                    )}
+                  </span>
                 )
               })}
             </div>
@@ -562,6 +641,10 @@ export function KahunaBoard({
               onClick={() => toggleDrawSel('blind')}
               aria-label={`draw pile, ${obs.pile_count} cards`}
             >
+              {oppDraw?.kind === 'blind' && (
+                // The opponent's blind draw floats off the pile, face down.
+                <span key={oppDraw.at} className="card facedown ghost-taken" />
+              )}
               {cardStack(obs.pile_count, () => 'card facedown')}
             </button>
           </div>
@@ -572,7 +655,7 @@ export function KahunaBoard({
               Draw
             </button>
             <button disabled={!skip || busy} onClick={() => skipDraw(skip)}>
-              Skip draw
+              Skip
             </button>
           </div>
           <div>
@@ -610,7 +693,9 @@ export function KahunaBoard({
               {commitLabel}
             </button>
             {canDiscard && <button onClick={discard}>Discard</button>}
-            <button onClick={() => { setSelCards([]); setSelBridges([]) }}>Clear</button>
+            <button onClick={() => { playSound('deselect'); setSelCards([]); setSelBridges([]) }}>
+              Clear
+            </button>
             {!plan && (
               <span className="dim">select lines/bridges that spend every selected card</span>
             )}

@@ -370,8 +370,16 @@ line.bridge-out {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-  align-items: flex-end;
+  /* Top-aligned so card rows line up with the draw/discard piles, whose
+     top card is anchored at the pile's top edge. */
+  align-items: flex-start;
   min-height: 94px;
+}
+
+/* Anchors the ghost of a just-taken face-up card to its slot. */
+.slot {
+  position: relative;
+  display: inline-flex;
 }
 
 .card {
@@ -483,6 +491,46 @@ button.pile:disabled {
   from {
     opacity: 0;
     translate: 0 -10px;
+  }
+}
+
+/* The opponent's draw, announced in place: the taken card floats up off
+   its source (face-up slot or pile) and fades … */
+.card.ghost-taken {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+  animation: ghost-taken 1.6s ease-in forwards;
+}
+
+@keyframes ghost-taken {
+  30% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    translate: 0 -48px;
+  }
+}
+
+/* … while the drawn card slides into their hand with a brief glow. */
+.card.drawn-in {
+  animation: card-drawn-in 1.4s ease-out;
+}
+
+@keyframes card-drawn-in {
+  0% {
+    opacity: 0;
+    translate: 0 12px;
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  60% {
+    box-shadow: 0 0 0 3px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 3px transparent;
   }
 }
 
