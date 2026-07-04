@@ -109,6 +109,17 @@ function historyLine(h: HistoryEntry, seat: number): string {
   }
 }
 
+// The previous turn plus the current (in-progress) turn — the last two
+// maximal runs of consecutive same-actor entries. The log shows only these,
+// never the whole game history.
+function recentTurns(history: HistoryEntry[]): HistoryEntry[] {
+  let changes = 0
+  for (let i = history.length - 1; i > 0; i--) {
+    if (history[i].actor !== history[i - 1].actor && ++changes === 2) return history.slice(i)
+  }
+  return history.slice()
+}
+
 export function KahunaBoard({
   observation,
   meta,
@@ -485,12 +496,16 @@ export function KahunaBoard({
   useEffect(() => {
     reportHud?.(
       <>
-        <b className="seat-pill" style={{ background: SEAT_COLOR[seat], color: SEAT_LABEL[seat] }}>
-          you {myScore}
-        </b>
-        <b className="seat-pill" style={{ background: SEAT_COLOR[1 - seat], color: SEAT_LABEL[1 - seat] }}>
-          them {theirScore}
-        </b>
+        {/* Two seat-colored scores; yours carries an accent ring (no "you"
+            / "them" text) so your own color reads at a glance. */}
+        <span className="score-pair">
+          <b className="seat-pill you" style={{ background: SEAT_COLOR[seat], color: SEAT_LABEL[seat] }}>
+            {myScore}
+          </b>
+          <b className="seat-pill" style={{ background: SEAT_COLOR[1 - seat], color: SEAT_LABEL[1 - seat] }}>
+            {theirScore}
+          </b>
+        </span>
         <span>Round {round}</span>
         {finalTurns !== null && <span className="dim">Final turns: {finalTurns}</span>}
       </>,
@@ -766,7 +781,7 @@ export function KahunaBoard({
           >
             <h3>Log</h3>
             <ul className="kahuna-log-full">
-              {[...history].reverse().map((h, i) => (
+              {[...recentTurns(history)].reverse().map((h, i) => (
                 <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
               ))}
             </ul>

@@ -348,6 +348,18 @@ input {
   font-weight: 700;
 }
 
+.score-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Your own score, ringed in the accent so your color reads at a glance —
+   replaces the old "you" / "them" text labels. */
+.seat-pill.you {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 .kahuna-svg {
   width: 100%;
   /* Sea margin around the islands: the viewBox is cropped tight for
