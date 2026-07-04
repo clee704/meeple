@@ -34,7 +34,7 @@ def test_view_conformance_over_a_seeded_playthrough(game_id):
         for action in legal:
             json.dumps(view.action_metadata(action))
             for viewer in range(spec.num_players):
-                json.dumps(view.describe_action(action, viewer=viewer, actor=actor))
+                json.dumps(view.describe_action(action, viewer=viewer, actor=actor, state=state))
         state = resolve_chance(state.apply_action(rng.choice(legal)), rng)
         steps += 1
         assert steps < 10_000, "playthrough did not terminate"

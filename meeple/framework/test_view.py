@@ -97,5 +97,6 @@ def test_default_result_declares_argmax_winner_or_draw(returns, winner):
 
 def test_default_describe_action_and_game_meta():
     view = _StubView()
-    assert view.describe_action(0, viewer=1, actor=0) == view.action_metadata(0)
+    state = _StubState([0.0, 0.0])
+    assert view.describe_action(0, viewer=1, actor=0, state=state) == view.action_metadata(0)
     assert view.game_meta() == {}

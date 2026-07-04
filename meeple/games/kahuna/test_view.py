@@ -8,6 +8,7 @@ import pytest
 from meeple.games.kahuna.engine import (
     DISCARD_BASE,
     DRAW_BLIND,
+    FACEUP_BASE,
     NUM_BRIDGES,
     PLACE_B_BASE,
     REMOVE_AB_BASE,
@@ -108,10 +109,18 @@ def test_action_metadata_decodes_the_engine_layout(view):
 
 def test_describe_action_hides_opponents_facedown_discard(view):
     action = DISCARD_BASE + ISLANDS.index("HUNA")
-    assert view.describe_action(action, viewer=0, actor=0)["island"] == "HUNA"
-    assert view.describe_action(action, viewer=1, actor=0)["island"] is None
+    state = _state()
+    assert view.describe_action(action, viewer=0, actor=0, state=state)["island"] == "HUNA"
+    assert view.describe_action(action, viewer=1, actor=0, state=state)["island"] is None
     # Non-discard actions are public and never masked.
-    assert view.describe_action(SKIP, viewer=1, actor=0) == {"kind": "skip"}
+    assert view.describe_action(SKIP, viewer=1, actor=0, state=state) == {"kind": "skip"}
+
+
+def test_describe_action_names_the_faceup_card_taken(view):
+    state = _state(face_up=("COCO", "HUNA", None))
+    for viewer in (0, 1):  # public to both players
+        meta = view.describe_action(FACEUP_BASE + 1, viewer=viewer, actor=0, state=state)
+        assert meta == {"kind": "take_faceup", "slot": 1, "card": "HUNA"}
 
 
 def test_result_uses_the_rules_tiebreak_not_returns_argmax(view):

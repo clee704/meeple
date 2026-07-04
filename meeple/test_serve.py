@@ -96,6 +96,18 @@ def test_join_assigns_seat_1_then_match_is_full(client):
     assert client.post("/api/matches/join", json={"join_code": "XXXXX"}).status_code == 404
 
 
+def test_history_names_the_faceup_card_taken(client):
+    created = _create(client, game_id="kahuna", seed=1)
+    match_id, token0 = created["match_id"], created["token"]
+    token1 = _join(client, created["join_code"])["token"]
+    before = _state(client, match_id, token0)["observation"]["face_up"][0]
+    env = _act(client, match_id, token0, 136).json()  # 136 = take face-up slot 0
+    entry = env["history"][-1]["meta"]
+    assert entry == {"kind": "take_faceup", "slot": 0, "card": before}
+    # The opponent's log names it too — the slot was public to both players.
+    assert _state(client, match_id, token1)["history"][-1]["meta"] == entry
+
+
 def test_auth_rejections(client):
     created = _create(client)
     match_id = created["match_id"]

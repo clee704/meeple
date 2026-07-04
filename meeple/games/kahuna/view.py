@@ -69,11 +69,16 @@ class KahunaView(GameView):
             return {"kind": "skip"}
         return {"kind": "discard", "island": ISLANDS[action - DISCARD_BASE]}
 
-    def describe_action(self, action: Action, viewer: int, actor: int) -> dict:
+    def describe_action(self, action: Action, viewer: int, actor: int, state: State) -> dict:
         meta = self.action_metadata(action)
         # A face-down discard's identity is the actor's private information.
         if meta["kind"] == "discard" and viewer != actor:
             meta["island"] = None
+        # Which card a face-up take grabbed is public (the slot was visible
+        # to everyone), so the history can name it outright.
+        if meta["kind"] == "take_faceup":
+            assert isinstance(state, KahunaState)
+            meta["card"] = state.face_up[meta["slot"]]
         return meta
 
     def result(self, state: State) -> dict:

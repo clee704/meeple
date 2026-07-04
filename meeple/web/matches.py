@@ -93,9 +93,14 @@ class Match:
         # The server, not the client, is authoritative about legality.
         if action not in self.state.legal_actions():
             raise IllegalActionError(f"action {action} is not legal now")
+        # Descriptions read the pre-action state (e.g. which face-up card a
+        # draw is about to take), so build them before applying.
+        entries = [
+            {"actor": seat, "meta": self.view.describe_action(action, viewer, seat, self.state)}
+            for viewer in range(len(self.tokens))
+        ]
         self.state = self.state.apply_action(action)
-        for viewer in range(len(self.tokens)):
-            entry = {"actor": seat, "meta": self.view.describe_action(action, viewer, seat)}
+        for viewer, entry in enumerate(entries):
             self.histories[viewer].append(entry)
         self.state = resolve_chance(self.state, self.rng)
         if self.state.is_terminal():
@@ -163,6 +168,7 @@ class MatchStore:
         rng = random.Random(secrets.randbits(64) if seed is None else seed)
         num_players = game.spec().num_players
         token = secrets.token_urlsafe(16)
+        tokens: list[str | None] = [token] + [None] * (num_players - 1)
         match = Match(
             match_id=secrets.token_urlsafe(9),
             join_code=self._new_join_code(),
@@ -171,7 +177,7 @@ class MatchStore:
             view=view,
             state=resolve_chance(game.new_initial_state(), rng),
             rng=rng,
-            tokens=[token] + [None] * (num_players - 1),
+            tokens=tokens,
             histories=[[] for _ in range(num_players)],
         )
         self._matches[match.match_id] = match

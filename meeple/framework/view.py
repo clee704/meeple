@@ -24,10 +24,12 @@ class GameView(ABC):
         ...) that a renderer maps clicks onto. Only ever sent to the player
         to move alongside `legal_actions`, so it needs no masking."""
 
-    def describe_action(self, action: Action, viewer: int, actor: int) -> dict:
-        """A move-history entry as seen by `viewer`. Override when the raw
-        action would leak `actor`'s hidden information (e.g. a face-down
-        discard whose action id encodes the card)."""
+    def describe_action(self, action: Action, viewer: int, actor: int, state: State) -> dict:
+        """A move-history entry as seen by `viewer`. `state` is the state the
+        action is about to be applied to, so a description can name what the
+        action touched (e.g. which card a face-up draw took). Override when
+        the raw action would leak `actor`'s hidden information (e.g. a
+        face-down discard whose action id encodes the card)."""
         return self.action_metadata(action)
 
     def result(self, state: State) -> dict:
