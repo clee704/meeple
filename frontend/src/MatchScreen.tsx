@@ -156,6 +156,18 @@ export function MatchScreen({
     if (prev === 'waiting' && env?.status === 'in_progress') playSound('joined')
   }, [env?.status])
 
+  // Ding when it becomes your turn — eyes drift away while the opponent
+  // thinks. Only on an observed flip mid-game: joining or reloading into
+  // your own turn stays quiet, and the match-start flip is already covered
+  // by the join sound.
+  const prevTurn = useRef({ status: env?.status, yours: env?.your_turn })
+  useEffect(() => {
+    const prev = prevTurn.current
+    prevTurn.current = { status: env?.status, yours: env?.your_turn }
+    if (prev.status === 'in_progress' && env?.status === 'in_progress' && !prev.yours && env.your_turn)
+      playSound('your-turn')
+  }, [env?.status, env?.your_turn])
+
   // The server's elapsed_seconds only refreshes when the state changes, so
   // tick locally once a second to keep the clock moving between polls.
   const [, setTick] = useState(0)

@@ -7,6 +7,7 @@ export type SoundName =
   | 'deselect' // a selected card put back
   | 'play' // card(s) played on the board (one sound per batch)
   | 'discard' // card(s) discarded face-down
+  | 'your-turn' // the opponent finished — it's your move
   | 'round' // an interim round (1/2) scored
   | 'game-over' // final scoring — the game is done
   | 'joined' // an opponent joined your match
@@ -51,6 +52,10 @@ const SOUNDS: Record<SoundName, () => void> = {
     tone(0, 440, 0.1, 0.03, 'sine')
   },
   discard: () => tone(0, 150, 0.16, 0.08, 'triangle'),
+  'your-turn': () => {
+    tone(0, 660, 0.09, 0.05, 'sine')
+    tone(0.08, 990, 0.22, 0.05, 'sine')
+  },
   round: () => {
     tone(0, 523, 0.18, 0.06, 'sine') // C5
     tone(0.16, 784, 0.3, 0.06, 'sine') // G5

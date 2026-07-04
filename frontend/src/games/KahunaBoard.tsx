@@ -57,6 +57,11 @@ const VIEWBOX = '202 117 386 306'
 const DRAW_NOTICE_KEY = 'meeple.kahuna.draw-notice'
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
 const SEAT_LABEL = ['var(--p0-ink)', 'var(--p1-ink)']
+// Island labels hold this on-screen size however far the board is scaled
+// down — counter-scaled by the SVG's live screen matrix — so they stay
+// readable on a narrow phone instead of shrinking with the board. Roughly
+// matches the hand cards' text at phone width.
+const ISLAND_LABEL_PX = 14
 
 // A pile of `count` cards (card 0 bottommost), top card anchored at the
 // top-left so a shrinking pile pulls in toward it; depth fans lower cards
@@ -224,6 +229,7 @@ export function KahunaBoard({
   const toggleDrawSel = (which: number | 'blind') => {
     setSelCards([])
     setSelBridges([])
+    playSound(drawSel === which ? 'deselect' : 'select')
     setDrawSel(drawSel === which ? null : which)
   }
 
@@ -272,19 +278,21 @@ export function KahunaBoard({
   const discardCount =
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
 
-  // Opponent plays go through one serialized queue: each batch carries the
-  // cards spent, the board as it looked BEFORE the plays, and its arrival
-  // time. While the queue is non-empty the overlay shows every queued
-  // card, and the board keeps drawing the oldest batch's pre-play state;
-  // batches expire in order, 3s after their own arrival (so the board is
-  // never more than ~3s behind, however fast the opponent plays), and each
-  // expiry advances the drawn board by exactly one play — animated below.
-  interface RevealBatch {
+  // Opponent plays go through one serialized queue, one entry per play:
+  // the cards it spent and the board as it looked BEFORE that poll's
+  // plays. Only the head entry's overlay shows, for a full 3s from the
+  // moment it reaches the head — plays are announced strictly one at a
+  // time, in order, however fast the opponent submitted them. The board
+  // keeps drawing the head's pre-play state; intermediate boards within
+  // one poll aren't reconstructable without game logic, so plays that
+  // arrived together animate onto the board as one step once the last of
+  // them has been announced.
+  interface Reveal {
     cards: string[]
     before: BoardSnap
-    at: number
+    shownAt: number // when this entry reached the head of the queue
   }
-  const [queue, setQueue] = useState<RevealBatch[]>([])
+  const [queue, setQueue] = useState<Reveal[]>([])
   // Enqueued during render (the "adjust state when props change" pattern),
   // so no frame ever paints the post-play board before the hold applies.
   const [tracked, setTracked] = useState({
@@ -292,25 +300,30 @@ export function KahunaBoard({
     board: { bridges: obs.bridges, control: obs.control } as BoardSnap,
   })
   if (tracked.len !== history.length) {
-    const cards = history
+    const plays = history
       .slice(tracked.len)
       .filter((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove'))
-      .flatMap((h) => h.meta.spend as string[])
-    if (cards.length > 0) {
-      const batch = { cards, before: tracked.board, at: Date.now() }
-      setQueue((q) => [...q, batch])
+    if (plays.length > 0) {
+      const before = tracked.board
+      const entries = plays.map((h) => ({ cards: h.meta.spend as string[], before, shownAt: Date.now() }))
+      setQueue((q) => [...q, ...entries])
     }
     setTracked({ len: history.length, board: { bridges: obs.bridges, control: obs.control } })
   }
   useEffect(() => {
     if (queue.length === 0) return
     const t = setTimeout(
-      () => setQueue((q) => q.slice(1)),
-      Math.max(0, queue[0].at + 3000 - Date.now()),
+      () =>
+        setQueue((q) => {
+          const rest = q.slice(1)
+          // The next play's clock starts only now that it's visible.
+          return rest.length ? [{ ...rest[0], shownAt: Date.now() }, ...rest.slice(1)] : rest
+        }),
+      Math.max(0, queue[0].shownAt + 3000 - Date.now()),
     )
     return () => clearTimeout(t)
   }, [queue])
-  const revealed = queue.flatMap((b) => b.cards)
+  const revealed = queue[0]?.cards ?? []
   // Selection logic keeps using the live obs; only the drawing is held back.
   const shownBoard = queue[0]?.before ?? { bridges: obs.bridges, control: obs.control }
 
@@ -434,6 +447,24 @@ export function KahunaBoard({
     return () => clearTimeout(t)
   }, [obs.hand])
 
+  // Island-label size in SVG user units, recomputed from the live screen
+  // matrix so the rendered pixel size stays ISLAND_LABEL_PX at any board
+  // width. ResizeObserver fires once on mount and on every resize.
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [labelSize, setLabelSize] = useState(11)
+  useLayoutEffect(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const measure = () => {
+      const ctm = svg.getScreenCTM()
+      if (ctm && ctm.a > 0) setLabelSize(ISLAND_LABEL_PX / ctm.a)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(svg)
+    return () => ro.disconnect()
+  }, [])
+
   return (
     <div className="kahuna">
       <div className="kahuna-status">
@@ -475,7 +506,7 @@ export function KahunaBoard({
 
       <div className="kahuna-board-row">
         <div className="kahuna-board-wrap">
-          <svg viewBox={VIEWBOX} className="kahuna-svg">
+          <svg ref={svgRef} viewBox={VIEWBOX} className="kahuna-svg">
             {bridges.map(([a, b], pos) => {
               const [x1, y1] = POS[a]
               const [x2, y2] = POS[b]
@@ -555,9 +586,10 @@ export function KahunaBoard({
                   />
                   <text
                     x={x}
-                    y={y + 4}
+                    y={y}
                     textAnchor="middle"
-                    fontSize={11}
+                    dominantBaseline="central"
+                    fontSize={labelSize}
                     fill={controller === null ? 'var(--island-ink)' : SEAT_LABEL[controller]}
                   >
                     {island}
@@ -606,9 +638,13 @@ export function KahunaBoard({
               {obs.face_up.map((card, slot) => {
                 const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
                 const ghost = oppDraw?.kind === 'faceup' && oppDraw.slot === slot ? oppDraw : null
+                // Hold the refill back while the taken card is still floating
+                // off this slot, so the new card only appears once that
+                // animation is done (rather than sitting under the ghost).
+                const shown = ghost ? null : card
                 return (
                   <span key={slot} className="slot">
-                    {card === null ? (
+                    {shown === null ? (
                       <span className="card empty" />
                     ) : (
                       <button
@@ -617,12 +653,12 @@ export function KahunaBoard({
                         disabled={!la}
                         onClick={() => toggleDrawSel(slot)}
                       >
-                        {card}
+                        {shown}
                       </button>
                     )}
                     {ghost && (
-                      // The card the opponent just took floats off its slot,
-                      // uncovering the refill underneath.
+                      // The card the opponent just took floats up off its
+                      // (now empty) slot and fades.
                       <span key={ghost.at} className="card ghost-taken">
                         {ghost.card}
                       </span>
@@ -706,12 +742,9 @@ export function KahunaBoard({
       <div>
         <h3>Log</h3>
         <ul className="kahuna-log">
-          {history
-            .slice(-1)
-            .reverse()
-            .map((h, i) => (
-              <li key={history.length - i}>{historyLine(h, seat)}</li>
-            ))}
+          {[...history].reverse().map((h, i) => (
+            <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
+          ))}
         </ul>
       </div>
       {confirmDialog}
