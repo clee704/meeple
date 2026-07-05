@@ -38,6 +38,40 @@ so progress must be durable and resumable from the repo alone:
 - This repo is public — never put secrets or anything you wouldn't want
   public into an issue, commit message, or code comment.
 
+### Persist autonomously — don't wait to be asked
+
+The human often fires a prompt from a phone and walks away; a session can end,
+or the prompt cache can go cold, at any point with no warning. Treat every
+checkpoint as if the session might not get a next turn:
+
+- **Mid-PR work.** Before ending a turn/session with a PR still open and work
+  remaining, leave (or update) a PR comment summarizing what's done and what's
+  left, so a fresh session can resume from the PR alone.
+- **Code review.** Post review findings as inline PR review comments (or a
+  review-summary comment), not only as chat text.
+- **Planning outcomes.** Write decisions and next steps into the relevant
+  GitHub issue (`phase` or `tech-debt` label), not only into conversation.
+- **Do this proactively, without asking first.** Asking permission and
+  stopping is the exact failure mode this rule exists to avoid. Posting a
+  progress/review/planning comment or updating an issue you're already
+  working on is pre-authorized by this rule — it doesn't need a confirmation
+  round-trip. This authorization covers *comments and issue-body updates
+  documenting your own work in progress*; it does not extend to other
+  GitHub actions (merging, closing, force-pushing, editing others' comments,
+  etc.), which still follow the normal confirm-first defaults.
+- **Never end a turn with a dirty working tree.** If your turn touched any
+  repo file, `git commit` it before finishing your output — even
+  work-in-progress, even partial, even if you expect the user may want to
+  change it further. Commits are trivially revertable/amendable (`git reset`,
+  `git revert`, a follow-up commit); an *uncommitted* diff sitting in a
+  session the user won't reopen for hours is effectively lost, and asking
+  "should I commit?" just recreates the cold-cache problem this rule exists
+  to solve. This specifically overrides the general "only commit when
+  explicitly asked" caution for the purpose of end-of-turn durability — it
+  does **not** license history-rewriting or destructive git operations
+  (amend, force-push, reset --hard, skipping hooks), which still need the
+  human, per the standing git safety rules and G9/H4 below.
+
 ## Guiding principles
 
 - **P1 — Always reach a game through the seam.** `ai`/`eval`/`web` import
