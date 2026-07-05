@@ -215,6 +215,7 @@ export function KahunaBoard({
   const commit = () =>
     run(async () => {
       for (const opt of plan ?? []) if (!(await submitAction(opt.action))) return
+      playSound('play') // once for the whole batch (see the sounds effect)
     })
 
   const discardActions = new Map(
@@ -232,6 +233,7 @@ export function KahunaBoard({
     const actions = selNames.map((name) => discardActions.get(name)!)
     return run(async () => {
       for (const a of actions) if (!(await submitAction(a))) return
+      playSound('discard') // once for the whole batch (see the sounds effect)
     })
   }
 
@@ -324,12 +326,20 @@ export function KahunaBoard({
     board: { bridges: obs.bridges, control: obs.control } as BoardSnap,
   })
   if (tracked.len !== history.length) {
-    const cards = history
-      .slice(tracked.len)
-      .filter((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove'))
-      .flatMap((h) => h.meta.spend as string[])
-    if (cards.length > 0) {
-      setQueue((q) => [...q, { cards, before: tracked.board, shownAt: Date.now() }])
+    const added = history.slice(tracked.len)
+    if (added.some((h) => h.actor === seat)) {
+      // You've just acted — a held-back opponent reveal is now stale (it would
+      // freeze the board on the pre-opponent snapshot while your own move looks
+      // like it did nothing, and could show a bridge the opponent removed as
+      // still yours). Drop it so the board jumps live to include your move.
+      if (queue.length > 0) setQueue([])
+    } else {
+      const cards = added
+        .filter((h) => h.meta.kind === 'place' || h.meta.kind === 'remove')
+        .flatMap((h) => h.meta.spend as string[])
+      if (cards.length > 0) {
+        setQueue((q) => [...q, { cards, before: tracked.board, shownAt: Date.now() }])
+      }
     }
     setTracked({ len: history.length, board: { bridges: obs.bridges, control: obs.control } })
   }
@@ -362,8 +372,12 @@ export function KahunaBoard({
     const added = history.slice(heardLen.current)
     heardLen.current = history.length
     if (added.length === 0) return
-    if (added.some((h) => h.meta.kind === 'place' || h.meta.kind === 'remove')) playSound('play')
-    if (added.some((h) => h.meta.kind === 'discard')) playSound('discard')
+    // Opponent moves only: your own place/remove/discard arrives one action
+    // per poll, so the cue is fired once per batch from commit()/discard()
+    // instead (otherwise a multi-action turn would sound once per action).
+    if (added.some((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove')))
+      playSound('play')
+    if (added.some((h) => h.actor !== seat && h.meta.kind === 'discard')) playSound('discard')
     const draw = added.find(
       (h) => h.actor !== seat && (h.meta.kind === 'draw_blind' || h.meta.kind === 'take_faceup'),
     )
@@ -776,7 +790,7 @@ export function KahunaBoard({
             onClick={(e) => e.stopPropagation()}
           >
             <h3>Log</h3>
-            <ul className="kahuna-log-full">
+            <ul className="kahuna-log-list">
               {[...recentTurns(history)].reverse().map((h, i) => (
                 <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
               ))}

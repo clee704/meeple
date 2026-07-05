@@ -15,7 +15,10 @@ class _Request(BaseModel):
 class CreateMatchRequest(_Request):
     game_id: str
     seat: int = 0  # which seat the creator takes (seat 0 always moves first)
-    seed: int | None = None  # fixed seed => reproducible deal, used by tests
+    # NB: no client-supplied seed. A chosen seed would let the creator
+    # reconstruct the whole deal (both hidden hands + pile order), defeating the
+    # per-seat masking the view layer exists to enforce. Tests that need a fixed
+    # deal call MatchStore.create(seed=...) directly, not this endpoint.
 
 
 class JoinMatchRequest(_Request):

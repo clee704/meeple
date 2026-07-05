@@ -13,14 +13,26 @@ from meeple.web.matches import MatchStore
 
 
 @pytest.fixture
-def client():
-    return TestClient(create_app())
+def store():
+    return MatchStore()
 
 
-def _create(client, game_id="kuhn", seed=7, **body):
-    resp = client.post("/api/matches", json={"game_id": game_id, "seed": seed, **body})
+@pytest.fixture
+def client(store):
+    return TestClient(create_app(store))
+
+
+def _create(client, game_id="kuhn", **body):
+    resp = client.post("/api/matches", json={"game_id": game_id, **body})
     assert resp.status_code == 201
     return resp.json()
+
+
+def _seed(store, game_id="kahuna", seed=1, seat=0):
+    """Create a fixed-deal match directly on the store (the HTTP API accepts no
+    client seed) and return the create-response shape the tests consume."""
+    match, token = store.create(game_id, seed=seed, creator_seat=seat)
+    return {"match_id": match.match_id, "join_code": match.join_code, "token": token, "seat": seat}
 
 
 def _join(client, join_code):
@@ -112,7 +124,7 @@ def test_creator_can_pick_their_seat(client):
 
 
 def test_history_names_the_faceup_card_taken(client):
-    created = _create(client, game_id="kahuna", seed=1)
+    created = _create(client, game_id="kahuna")
     match_id, token0 = created["match_id"], created["token"]
     token1 = _join(client, created["join_code"])["token"]
     before = _state(client, match_id, token0)["observation"]["face_up"][0]
@@ -121,6 +133,13 @@ def test_history_names_the_faceup_card_taken(client):
     assert entry == {"kind": "take_faceup", "slot": 0, "card": before}
     # The opponent's log names it too — the slot was public to both players.
     assert _state(client, match_id, token1)["history"][-1]["meta"] == entry
+
+
+def test_create_rejects_a_client_supplied_seed(client):
+    # A chosen seed would let the creator reconstruct the opponent's hidden
+    # hand, so the deal must not be client-controllable (unknown field → 422).
+    resp = client.post("/api/matches", json={"game_id": "kahuna", "seed": 1})
+    assert resp.status_code == 422
 
 
 def test_auth_rejections(client):
@@ -188,10 +207,10 @@ def test_leave_rejects_bad_token(client):
     assert resp.status_code == 403
 
 
-def test_turn_count_advances_when_the_turn_passes(client):
+def test_turn_count_advances_when_the_turn_passes(client, store):
     # Seed 1: seat 0 moves first holding BARI, and BARI-FAAA (bridge_pos 6)
     # is open — action 6 is place(6, using card a=BARI); 135 is draw-blind.
-    created = _create(client, game_id="kahuna", seed=1)
+    created = _seed(store, "kahuna", seed=1)
     match_id, token0 = created["match_id"], created["token"]
     token1 = _join(client, created["join_code"])["token"]
 
@@ -242,7 +261,7 @@ def test_kuhn_playthrough_and_polling(client):
 
 
 def test_kahuna_playthrough_hides_opponent_privates(client):
-    created = _create(client, game_id="kahuna", seed=99)
+    created = _create(client, game_id="kahuna")
     match_id, token0 = created["match_id"], created["token"]
     token1 = _join(client, created["join_code"])["token"]
 
@@ -259,8 +278,8 @@ def test_kahuna_playthrough_hides_opponent_privates(client):
         assert len(env["result"]["points"]) == 2
 
 
-def test_same_seed_and_actions_give_identical_envelopes(client):
-    ids = [_create(client, game_id="kahuna", seed=42) for _ in range(2)]
+def test_same_seed_and_actions_give_identical_envelopes(client, store):
+    ids = [_seed(store, "kahuna", seed=42) for _ in range(2)]
     tokens = []
     for created in ids:
         tokens.append((created["token"], _join(client, created["join_code"])["token"]))

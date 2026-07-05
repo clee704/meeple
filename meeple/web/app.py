@@ -5,7 +5,12 @@ server-side against `legal_actions` (P8).
 
 All endpoints are `async def` without awaits: they run on the single event
 loop thread, which serializes store access — no locking needed at this
-scale (two LAN players)."""
+scale (two LAN players). This is load-bearing and unenforced: it holds ONLY
+while every handler stays await-free AND the server runs a single worker.
+Adding an `await` inside a handler (e.g. awaiting an AI move) or running
+`--workers N` would let store mutations race — two `/join`s claiming the same
+seat, a lost `version` bump. Add a lock (or re-establish this invariant
+deliberately) before doing either."""
 
 from pathlib import Path
 
@@ -27,8 +32,11 @@ from meeple.web.schemas import ActionRequest, CreateMatchRequest, JoinMatchReque
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
-def create_app() -> FastAPI:
-    store = MatchStore()
+def create_app(store: MatchStore | None = None) -> FastAPI:
+    # `store` is injectable so tests can seed a fixed deal via
+    # MatchStore.create(seed=...) and then drive that match over HTTP — the
+    # public API deliberately offers no client seed (see CreateMatchRequest).
+    store = store if store is not None else MatchStore()
     app = FastAPI(title="MeepleMind")
 
     def _authenticated(match_id: str, token: str) -> tuple[Match, int]:
@@ -51,7 +59,7 @@ def create_app() -> FastAPI:
     @app.post("/api/matches", status_code=201)
     async def create_match(req: CreateMatchRequest) -> dict:
         try:
-            match, token = store.create(req.game_id, req.seed, req.seat)
+            match, token = store.create(req.game_id, creator_seat=req.seat)
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from None
         except ValueError as e:  # seat out of range for this game
