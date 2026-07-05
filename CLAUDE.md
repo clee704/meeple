@@ -49,16 +49,22 @@ checkpoint as if the session might not get a next turn:
   left, so a fresh session can resume from the PR alone.
 - **Code review.** Post review findings as inline PR review comments (or a
   review-summary comment), not only as chat text.
+- **Review fixes.** After fixing findings from a PR review round: commit,
+  push to the PR's branch, and reply to + resolve each review-comment thread
+  you addressed. Don't wait to be asked — this is the same checkpoint as
+  above, just on the fixing side rather than the reviewing side.
 - **Planning outcomes.** Write decisions and next steps into the relevant
   GitHub issue (`phase` or `tech-debt` label), not only into conversation.
 - **Do this proactively, without asking first.** Asking permission and
   stopping is the exact failure mode this rule exists to avoid. Posting a
-  progress/review/planning comment or updating an issue you're already
-  working on is pre-authorized by this rule — it doesn't need a confirmation
-  round-trip. This authorization covers *comments and issue-body updates
-  documenting your own work in progress*; it does not extend to other
-  GitHub actions (merging, closing, force-pushing, editing others' comments,
-  etc.), which still follow the normal confirm-first defaults.
+  progress/review/planning comment, updating an issue you're already working
+  on, or pushing a fix commit to the PR branch you're already working on and
+  resolving the threads it addresses, is pre-authorized by this rule — it
+  doesn't need a confirmation round-trip. This authorization covers
+  *comments, issue-body updates, and plain pushes documenting or advancing
+  your own work in progress*; it does not extend to other GitHub actions
+  (merging, closing, force-pushing, editing others' comments, etc.), which
+  still follow the normal confirm-first defaults.
 - **Never end a turn with a dirty working tree.** If your turn touched any
   repo file, `git commit` it before finishing your output — even
   work-in-progress, even partial, even if you expect the user may want to
