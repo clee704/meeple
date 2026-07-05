@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react'
+import { memo, type ComponentType, type ReactNode } from 'react'
 import type { HistoryEntry, LegalAction } from '../types'
 import { KahunaBoard } from './KahunaBoard'
 import { KuhnBoard } from './KuhnBoard'
@@ -24,9 +24,12 @@ export interface GameRendererProps {
   reportHud?: (node: ReactNode) => void
 }
 
+// Memoized: MatchScreen re-renders every second for its clock tick, and a
+// board (Kahuna's is ~800 lines) shouldn't re-execute its render body for a
+// cosmetic tick that doesn't change any of its props.
 export const renderers: Record<string, ComponentType<GameRendererProps>> = {
-  kahuna: KahunaBoard,
-  kuhn: KuhnBoard,
+  kahuna: memo(KahunaBoard),
+  kuhn: memo(KuhnBoard),
 }
 
 // Seat labels for games where the lobby offers a seat choice, indexed by

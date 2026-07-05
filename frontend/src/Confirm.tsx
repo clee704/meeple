@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { Overlay } from './Overlay'
 
 interface Options {
   confirmLabel?: string
@@ -38,34 +39,20 @@ export function useConfirm(): [
     setPending(null)
   }
 
-  useEffect(() => {
-    if (!pending) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        pending.resolve(false)
-        setPending(null)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [pending])
-
   const dialog = pending && (
-    <div className="modal-backdrop" onClick={() => close(false)}>
-      <div className="modal" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <p>{pending.message}</p>
-        <div className="action-row modal-actions">
-          {!pending.alert && <button onClick={() => close(false)}>Cancel</button>}
-          <button
-            className={pending.danger ? 'danger' : 'primary'}
-            autoFocus
-            onClick={() => close(true)}
-          >
-            {pending.confirmLabel}
-          </button>
-        </div>
+    <Overlay
+      onClose={() => close(false)}
+      contentClassName="modal"
+      contentProps={{ role: 'alertdialog', 'aria-modal': true }}
+    >
+      <p>{pending.message}</p>
+      <div className="action-row modal-actions">
+        {!pending.alert && <button onClick={() => close(false)}>Cancel</button>}
+        <button className={pending.danger ? 'danger' : 'primary'} autoFocus onClick={() => close(true)}>
+          {pending.confirmLabel}
+        </button>
       </div>
-    </div>
+    </Overlay>
   )
   return [dialog, ask]
 }

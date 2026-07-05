@@ -57,6 +57,7 @@ class Match:
     histories: list[list[dict]]
     version: int = 1
     forfeited_by: int | None = None
+    canceled: bool = False
     # Wall-clock/turn bookkeeping for the UI. A "turn" is a stretch of
     # actions by one player: it advances when `to_move` changes hands.
     turn_count: int = 1
@@ -66,7 +67,7 @@ class Match:
 
     @property
     def status(self) -> str:
-        if self.forfeited_by is not None:
+        if self.canceled or self.forfeited_by is not None:
             return "finished"
         if None in self.tokens:
             return "waiting"
@@ -78,10 +79,16 @@ class Match:
                 return seat
         raise BadTokenError("bad seat token")
 
-    def forfeit(self, seat: int) -> None:
-        if self.status == "finished":
-            raise IllegalActionError("match is already finished")
-        self.forfeited_by = seat
+    def leave(self, seat: int) -> None:
+        """`seat` leaves the match. If no opponent ever joined there is no one
+        to award a win to, so the match is simply canceled; otherwise `seat`
+        forfeits and the remaining seat(s) win."""
+        if self.status == "waiting":
+            self.canceled = True
+        elif self.status == "in_progress":
+            self.forfeited_by = seat
+        else:
+            raise IllegalActionError(f"match is {self.status}, cannot be left")
         self.finished_at = time.monotonic()
         self.version += 1
 
@@ -147,12 +154,18 @@ class Match:
         return end - start
 
     def _result(self) -> dict | None:
+        if self.canceled:
+            return None  # never started: no scores, no winner
         if self.forfeited_by is not None:
             # A forfeit isn't a game-engine outcome, so it's scored here
-            # rather than via the view: the forfeiting seat loses outright.
+            # rather than via the view: the forfeiting seat loses outright,
+            # and every remaining seat ties for the win. Same
+            # highest-score-wins/tie-is-a-draw convention as GameView.result.
             num_players = len(self.tokens)
             scores = [-1.0 if p == self.forfeited_by else 1.0 for p in range(num_players)]
-            winner = None if num_players != 2 else 1 - self.forfeited_by
+            best = max(scores)
+            winners = [p for p, s in enumerate(scores) if s == best]
+            winner = winners[0] if len(winners) == 1 else None
             return {"scores": scores, "winner": winner}
         return self.view.result(self.state) if self.state.is_terminal() else None
 
@@ -194,7 +207,7 @@ class MatchStore:
         if match_id is None:
             raise UnknownMatchError(f"no match with join code {join_code!r}")
         match = self._matches[match_id]
-        if match.forfeited_by is not None:
+        if match.canceled or match.forfeited_by is not None:
             raise UnknownMatchError(f"match with join code {join_code!r} is no longer available")
         if None not in match.tokens:
             raise MatchFullError("all seats are taken")

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useConfirm } from '../Confirm'
+import { Overlay } from '../Overlay'
 import { playSound } from '../sound'
 import type { HistoryEntry, LegalAction } from '../types'
 import type { GameRendererProps } from './registry'
@@ -135,21 +136,24 @@ export function KahunaBoard({
   const { islands, bridges } = meta as unknown as KahunaMeta
 
   // Card-first selection, mirroring the physical game: pick the card(s) to
-  // spend, then pick the line(s)/bridge(s) they pay for, then confirm.
-  const [selCards, setSelCards] = useState<number[]>([]) // indices into obs.hand
-  const [selBridges, setSelBridges] = useState<number[]>([]) // bridge positions
-  // Draw source picked to end the turn: a face-up slot, or 'blind' for the
-  // draw pile. Confirmed with an explicit button so a stray tap can't end
-  // the turn by accident.
-  const [drawSel, setDrawSel] = useState<number | 'blind' | null>(null)
+  // spend, then pick the line(s)/bridge(s) they pay for, then confirm. A
+  // draw selection is mutually exclusive with a card/bridge selection, so
+  // it's one state instead of three independently-cleared ones — nothing
+  // can set one half without clearing the other.
+  type Selection =
+    | { mode: 'idle' }
+    | { mode: 'play'; cards: number[]; bridges: number[] } // indices into obs.hand; bridge positions
+    | { mode: 'draw'; which: number | 'blind' } // a face-up slot, or 'blind' for the draw pile
+  const [sel, setSel] = useState<Selection>({ mode: 'idle' })
+  const selCards = sel.mode === 'play' ? sel.cards : []
+  const selBridges = sel.mode === 'play' ? sel.bridges : []
+  const drawSel = sel.mode === 'draw' ? sel.which : null
   const [busy, setBusy] = useState(false) // an action (or batch) is in flight
   const [logOpen, setLogOpen] = useState(false) // full-history overlay
   const [confirmDialog, ask] = useConfirm()
 
   useEffect(() => {
-    setSelCards([])
-    setSelBridges([])
-    setDrawSel(null)
+    setSel({ mode: 'idle' })
   }, [observation])
 
   const optionsByPos = useMemo(() => payOptionsByBridge(legalActions), [legalActions])
@@ -168,23 +172,23 @@ export function KahunaBoard({
   }
 
   const toggleCard = (i: number) => {
-    setDrawSel(null)
     if (selCards.includes(i)) {
       playSound('deselect')
       const next = selCards.filter((j) => j !== i)
       // Drop the board selection if the remaining cards can't pay for it.
       const names = next.map((j) => obs.hand[j])
-      if (matchSelection(selOptions, names, false) === null) setSelBridges([])
-      setSelCards(next)
+      const bridges = matchSelection(selOptions, names, false) === null ? [] : selBridges
+      setSel(next.length > 0 || bridges.length > 0 ? { mode: 'play', cards: next, bridges } : { mode: 'idle' })
     } else {
       playSound('select')
-      setSelCards([...selCards, i])
+      setSel({ mode: 'play', cards: [...selCards, i], bridges: selBridges })
     }
   }
 
   const toggleBridge = (pos: number) => {
-    if (selBridges.includes(pos)) setSelBridges(selBridges.filter((p) => p !== pos))
-    else if (canAdd(pos)) setSelBridges([...selBridges, pos])
+    if (selBridges.includes(pos))
+      setSel({ mode: 'play', cards: selCards, bridges: selBridges.filter((p) => p !== pos) })
+    else if (canAdd(pos)) setSel({ mode: 'play', cards: selCards, bridges: [...selBridges, pos] })
   }
 
   // Removes go first: a place's majority cascade can strip an opponent
@@ -242,10 +246,8 @@ export function KahunaBoard({
   // Picking a draw source is picking how the turn ends — it supersedes any
   // half-built play, so clear that selection to keep the state readable.
   const toggleDrawSel = (which: number | 'blind') => {
-    setSelCards([])
-    setSelBridges([])
     playSound(drawSel === which ? 'deselect' : 'select')
-    setDrawSel(drawSel === which ? null : which)
+    setSel(drawSel === which ? { mode: 'idle' } : { mode: 'draw', which })
   }
 
   // First draw ever in this browser gets a one-time heads-up; after that
@@ -327,19 +329,20 @@ export function KahunaBoard({
   })
   if (tracked.len !== history.length) {
     const added = history.slice(tracked.len)
-    if (added.some((h) => h.actor === seat)) {
-      // You've just acted — a held-back opponent reveal is now stale (it would
-      // freeze the board on the pre-opponent snapshot while your own move looks
-      // like it did nothing, and could show a bridge the opponent removed as
-      // still yours). Drop it so the board jumps live to include your move.
-      if (queue.length > 0) setQueue([])
-    } else {
-      const cards = added
-        .filter((h) => h.meta.kind === 'place' || h.meta.kind === 'remove')
-        .flatMap((h) => h.meta.spend as string[])
-      if (cards.length > 0) {
-        setQueue((q) => [...q, { cards, before: tracked.board, shownAt: Date.now() }])
-      }
+    // A poll/action response can batch an opponent's move together with your
+    // own subsequent one (e.g. you act right after their move lands). Only
+    // the entries up to your own are opponent moves worth revealing —
+    // entries from your own action don't invalidate an opponent reveal that
+    // arrived earlier in the very same batch, only a queue left over from
+    // before it (which would freeze the board on a now-stale snapshot).
+    const ownIdx = added.findIndex((h) => h.actor === seat)
+    const opponentPart = ownIdx === -1 ? added : added.slice(0, ownIdx)
+    if (ownIdx !== -1 && queue.length > 0) setQueue([])
+    const cards = opponentPart
+      .filter((h) => h.meta.kind === 'place' || h.meta.kind === 'remove')
+      .flatMap((h) => h.meta.spend as string[])
+    if (cards.length > 0) {
+      setQueue((q) => [...q, { cards, before: tracked.board, shownAt: Date.now() }])
     }
     setTracked({ len: history.length, board: { bridges: obs.bridges, control: obs.control } })
   }
@@ -781,27 +784,23 @@ export function KahunaBoard({
       </div>
 
       {logOpen && (
-        <div className="modal-backdrop" onClick={() => setLogOpen(false)}>
-          <div
-            className="modal kahuna-log-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Move log"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3>Log</h3>
-            <ul className="kahuna-log-list">
-              {[...recentTurns(history)].reverse().map((h, i) => (
-                <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
-              ))}
-            </ul>
-            <div className="action-row modal-actions">
-              <button className="primary" onClick={() => setLogOpen(false)}>
-                Close
-              </button>
-            </div>
+        <Overlay
+          onClose={() => setLogOpen(false)}
+          contentClassName="modal kahuna-log-modal"
+          contentProps={{ role: 'dialog', 'aria-modal': true, 'aria-label': 'Move log' }}
+        >
+          <h3>Log</h3>
+          <ul className="kahuna-log-list">
+            {[...recentTurns(history)].reverse().map((h, i) => (
+              <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
+            ))}
+          </ul>
+          <div className="action-row modal-actions">
+            <button className="primary" onClick={() => setLogOpen(false)}>
+              Close
+            </button>
           </div>
-        </div>
+        </Overlay>
       )}
       {confirmDialog}
     </div>

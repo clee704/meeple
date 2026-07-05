@@ -117,7 +117,7 @@ def create_app(store: MatchStore | None = None) -> FastAPI:
     async def leave_match(match_id: str, x_seat_token: str = Header()) -> dict:
         match, seat = _authenticated(match_id, x_seat_token)
         try:
-            match.forfeit(seat)
+            match.leave(seat)
         except IllegalActionError as e:
             raise HTTPException(status_code=409, detail=str(e)) from None
         return match.envelope(seat, include_meta=False)

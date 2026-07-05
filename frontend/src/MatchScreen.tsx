@@ -3,6 +3,7 @@ import { ApiError, getState, leaveMatch, postAction } from './api'
 import { useConfirm } from './Confirm'
 import { renderers } from './games/registry'
 import { playSound } from './sound'
+import { useEscapeToClose } from './useEscapeToClose'
 import type { Envelope, Session } from './types'
 
 const POLL_MS = 1000
@@ -25,6 +26,7 @@ function Menu({
   extras?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
+  useEscapeToClose(() => setOpen(false), open)
   return (
     <div className="menu">
       <button
@@ -126,7 +128,7 @@ function Hud({
   // The turn pill wears the active player's seat color, so your own color is
   // the thing that lights up when it's your move (and the opponent's when
   // it's theirs) — seat 0 is --p0, seat 1 is --p1.
-  const activeSeat = env.your_turn ? env.seat : 1 - env.seat
+  const activeSeat = env.to_move ?? env.seat
   return (
     <header className="hud">
       <span
@@ -205,6 +207,11 @@ export function MatchScreen({
 
   useEffect(() => {
     let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // Self-rescheduling rather than setInterval: the next poll is only fired
+    // after the previous one settles, so a slow response (backgrounded tab,
+    // laggy LAN) can never leave two requests in flight to resolve out of
+    // order and let a stale envelope clobber a newer one.
     const tick = async (initial: boolean) => {
       try {
         const resp = await getState(session, initial ? undefined : envRef.current?.version)
@@ -214,28 +221,34 @@ export function MatchScreen({
         if (!stopped && err instanceof ApiError && (err.status === 404 || err.status === 403)) {
           onError('Match no longer exists on the server.')
           onExit()
+          return
         }
         // transient network errors: keep polling silently
       }
+      if (!stopped) timer = setTimeout(() => tick(false), POLL_MS)
     }
     tick(true)
-    const id = setInterval(() => tick(false), POLL_MS)
     return () => {
       stopped = true
-      clearInterval(id)
+      if (timer) clearTimeout(timer)
     }
   }, [session, absorb, onExit, onError])
 
-  const submitAction = async (action: number) => {
-    try {
-      absorb(await postAction(session, action))
-      return true
-    } catch (err) {
-      if (err instanceof ApiError) onError(err.message)
-      else onError(String(err))
-      return false
-    }
-  }
+  // Stable identity so a memoized Board doesn't re-render on every 1s clock
+  // tick (which only touches the `tick` state below, not this callback).
+  const submitAction = useCallback(
+    async (action: number) => {
+      try {
+        absorb(await postAction(session, action))
+        return true
+      } catch (err) {
+        if (err instanceof ApiError) onError(err.message)
+        else onError(String(err))
+        return false
+      }
+    },
+    [session, absorb, onError],
+  )
 
   const quit = async () => {
     const prompt =

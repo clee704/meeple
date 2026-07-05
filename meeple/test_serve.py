@@ -196,7 +196,14 @@ def test_leave_forfeits_an_in_progress_match(client):
 def test_leave_while_waiting_closes_the_match_to_new_joiners(client):
     created = _create(client)
     match_id, token0 = created["match_id"], created["token"]
-    assert _leave(client, match_id, token0).status_code == 200
+    resp = _leave(client, match_id, token0)
+    assert resp.status_code == 200
+    env = resp.json()
+    assert env["status"] == "finished"
+    # No opponent ever joined, so there's no one to name a winner over —
+    # unlike an in-progress forfeit, this must carry no fabricated result.
+    assert env["forfeited_by"] is None
+    assert env["result"] is None
     resp = client.post("/api/matches/join", json={"join_code": created["join_code"]})
     assert resp.status_code == 404
 
