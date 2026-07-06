@@ -93,11 +93,25 @@ def test_create_then_waiting_state(client):
     assert env["status"] == "waiting"
     assert env["your_turn"] is False
     assert env["to_move"] is None
+    assert env["observation"] == {}
     assert env["legal_actions"] == []
     assert "meta" in env  # initial fetch bootstraps the renderer
     assert env["turn_count"] == 1
     assert env["elapsed_seconds"] == 0.0  # the clock doesn't run while waiting
     assert env["turn_elapsed_seconds"] == 0.0
+
+
+@pytest.mark.parametrize("game_id", ["kuhn", "kahuna"])
+def test_waiting_state_hides_deal_dependent_observation(client, game_id):
+    created = _create(client, game_id=game_id)
+    waiting = _state(client, created["match_id"], created["token"])
+    assert waiting["status"] == "waiting"
+    assert waiting["observation"] == {}
+
+    joined = _join(client, created["join_code"])
+    started = _state(client, created["match_id"], joined["token"])
+    assert started["status"] == "in_progress"
+    assert started["observation"] != {}
 
 
 def test_join_assigns_seat_1_then_match_is_full(client):

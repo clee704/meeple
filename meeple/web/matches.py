@@ -138,16 +138,20 @@ class Match:
         # at versions <= since are already on the client, so only newer ones
         # ride along (bisect works because entry_versions is ascending).
         history_from = 0 if since is None else bisect_right(self.entry_versions, since)
-        in_progress = self.status == "in_progress"
+        status = self.status
+        waiting = status == "waiting"
+        in_progress = status == "in_progress"
         your_turn = in_progress and self.state.current_player() == seat
         env = {
             "version": self.version,
             "game_id": self.game_id,
             "seat": seat,
-            "status": self.status,
+            "status": status,
             "to_move": self.state.current_player() if in_progress else None,
             "your_turn": your_turn,
-            "observation": self.view.observation(self.state, seat),
+            # While a lobby is waiting for all seats to fill, the creator
+            # must not see any deal-dependent private or public setup state.
+            "observation": {} if waiting else self.view.observation(self.state, seat),
             "legal_actions": [
                 {"action": a, "name": spec.action_names[a], "meta": self.view.action_metadata(a)}
                 for a in (self.state.legal_actions() if your_turn else [])

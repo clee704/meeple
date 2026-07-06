@@ -79,9 +79,38 @@ export function leaveMatch(session: Session): Promise<Envelope> {
 // match after an accidental tab close.
 const SESSION_KEY = 'meeple.session'
 
+function isStoredSession(value: unknown): value is Session {
+  if (!value || typeof value !== 'object') return false
+  const s = value as Record<string, unknown>
+  return (
+    typeof s.matchId === 'string' &&
+    typeof s.gameId === 'string' &&
+    Number.isInteger(s.seat) &&
+    typeof s.token === 'string' &&
+    (s.joinCode === undefined || typeof s.joinCode === 'string')
+  )
+}
+
+function parseStoredSession(raw: string | null): Session | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return isStoredSession(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 export function loadSession(): Session | null {
-  const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY)
-  return raw ? (JSON.parse(raw) as Session) : null
+  const tabRaw = sessionStorage.getItem(SESSION_KEY)
+  const tabSession = parseStoredSession(tabRaw)
+  if (tabRaw !== null && !tabSession) sessionStorage.removeItem(SESSION_KEY)
+  if (tabSession) return tabSession
+
+  const sharedRaw = localStorage.getItem(SESSION_KEY)
+  const sharedSession = parseStoredSession(sharedRaw)
+  if (sharedRaw !== null && !sharedSession) localStorage.removeItem(SESSION_KEY)
+  return sharedSession
 }
 
 export function saveSession(session: Session): void {

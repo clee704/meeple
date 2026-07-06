@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { GameRendererProps } from './registry'
 
 // Shape of meeple/games/kuhn/view.py's observation and result payloads.
@@ -10,6 +11,17 @@ interface KuhnObservation {
 export function KuhnBoard({ observation, yourTurn, legalActions, result, submitAction }: GameRendererProps) {
   const obs = observation as KuhnObservation
   const cards = result?.cards as string[] | null | undefined
+  const [busy, setBusy] = useState(false)
+
+  const act = async (action: number) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await submitAction(action)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="kuhn-board">
@@ -24,7 +36,7 @@ export function KuhnBoard({ observation, yourTurn, legalActions, result, submitA
       {yourTurn && (
         <div className="action-row">
           {legalActions.map((la) => (
-            <button key={la.action} onClick={() => submitAction(la.action)}>
+            <button key={la.action} disabled={busy} onClick={() => act(la.action)}>
               {la.name}
             </button>
           ))}

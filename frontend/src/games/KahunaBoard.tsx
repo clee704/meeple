@@ -273,9 +273,9 @@ export function KahunaBoard({
   const draw = async (la: LegalAction | undefined) => {
     if (!la) return
     if (!localStorage.getItem(DRAW_NOTICE_KEY)) {
-      localStorage.setItem(DRAW_NOTICE_KEY, '1')
       if (!(await ask('Heads-up: drawing a card ends your turn. Draw now?', { confirmLabel: 'Draw' })))
         return
+      localStorage.setItem(DRAW_NOTICE_KEY, '1')
     }
     endTurn(la)
   }

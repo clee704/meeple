@@ -89,7 +89,9 @@ function Hud({
   )
   if (env.status === 'finished') {
     const verdict =
-      env.forfeited_by !== null
+      env.result === null
+        ? 'Match canceled.'
+        : env.forfeited_by !== null
         ? env.forfeited_by === env.seat
           ? 'You quit.'
           : 'Opponent quit — you win!'
@@ -299,7 +301,7 @@ export function MatchScreen({
         onExit={onExit}
         onQuit={quit}
       />
-      {Board ? (
+      {env.status === 'waiting' ? null : Board ? (
         <Board
           observation={env.observation}
           meta={meta}
