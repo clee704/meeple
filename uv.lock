@@ -540,18 +540,16 @@ name = "meeple"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "numpy" },
+    { name = "pydantic" },
     { name = "torch" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
 openspiel = [
     { name = "open-spiel" },
-]
-web = [
-    { name = "fastapi" },
-    { name = "pydantic" },
-    { name = "uvicorn" },
 ]
 
 [package.dev-dependencies]
@@ -569,12 +567,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.110" },
+    { name = "fastapi", specifier = ">=0.110" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "open-spiel", marker = "extra == 'openspiel'", specifier = ">=1.5" },
-    { name = "pydantic", marker = "extra == 'web'", specifier = ">=2" },
+    { name = "pydantic", specifier = ">=2" },
     { name = "torch", specifier = ">=2.0" },
-    { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.30" },
+    { name = "uvicorn", specifier = ">=0.30" },
 ]
 provides-extras = ["openspiel", "web"]
 

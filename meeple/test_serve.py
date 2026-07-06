@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import meeple.games  # noqa: F401 — side effect: registers games + views
-from meeple.web.app import create_app
+from meeple.web.app import FrontendBuildMissingError, create_app
 from meeple.web.matches import _EVICT_IDLE_SECONDS, MatchStore, UnknownMatchError
 
 
@@ -20,7 +20,7 @@ def store():
 
 @pytest.fixture
 def client(store):
-    return TestClient(create_app(store))
+    return TestClient(create_app(store, frontend_dist=None))
 
 
 def _create(client, game_id="kuhn", **body):
@@ -313,10 +313,36 @@ def test_same_seed_and_actions_give_identical_envelopes(client, store):
             assert _act(client, c["match_id"], toks[mover], action).status_code == 200
 
 
-def test_serve_module_exposes_the_wired_app():
+def test_serve_module_wires_the_registered_app(tmp_path):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<h1>MeepleMind</h1>")
+
     import meeple.serve
 
-    assert meeple.serve.app.title == "MeepleMind"
+    app = meeple.serve.make_app(frontend_dist=dist)
+    client = TestClient(app)
+    assert app.title == "MeepleMind"
+    assert client.get("/").text == "<h1>MeepleMind</h1>"
+    games = {g["game_id"] for g in client.get("/api/games").json()}
+    assert games == {"kuhn", "kahuna"}
+
+
+def test_browser_server_fails_loudly_without_frontend_build(tmp_path, store):
+    missing = tmp_path / "dist"
+    with pytest.raises(FrontendBuildMissingError, match="npm run build"):
+        create_app(store, frontend_dist=missing)
+
+
+def test_cli_reports_missing_frontend_build(monkeypatch):
+    import meeple.serve
+
+    def fail():
+        raise FrontendBuildMissingError("missing frontend")
+
+    monkeypatch.setattr(meeple.serve, "make_app", fail)
+    with pytest.raises(SystemExit, match="missing frontend"):
+        meeple.serve.main()
 
 
 def test_idle_matches_are_evicted_on_the_next_create(store, monkeypatch):

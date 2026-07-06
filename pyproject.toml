@@ -5,18 +5,18 @@ description = "MeepleMind — a game-agnostic board-game AI platform (engine, AI
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.110",
     "numpy>=2.0",
+    "pydantic>=2",
     "torch>=2.0",
+    "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
 # Used only to cross-check native engines in tests, never a game backend — install on demand.
 openspiel = ["open-spiel>=1.5"]
-web = [
-    "fastapi>=0.110",
-    "pydantic>=2",
-    "uvicorn>=0.30",
-]
+# Compatibility alias: the web stack is part of the default CLI runtime now.
+web = []
 
 [project.scripts]
 meeple = "meeple.serve:main"

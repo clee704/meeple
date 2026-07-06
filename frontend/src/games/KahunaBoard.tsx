@@ -230,8 +230,14 @@ export function KahunaBoard({
 
   const commit = () =>
     run(async () => {
-      for (const opt of plan ?? []) if (!(await submitAction(opt.action))) return
-      playSound('play') // once for the whole batch (see the sounds effect)
+      let accepted = false
+      for (const opt of plan ?? []) {
+        const env = await submitAction(opt.action)
+        if (!env) return
+        accepted = true
+        if (env.status === 'finished') break
+      }
+      if (accepted) playSound('play') // once for the whole batch (see the sounds effect)
     })
 
   const discardActions = new Map(

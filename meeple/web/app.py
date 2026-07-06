@@ -29,10 +29,27 @@ from meeple.web.matches import (
 )
 from meeple.web.schemas import ActionRequest, CreateMatchRequest, JoinMatchRequest
 
-_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
-def create_app(store: MatchStore | None = None) -> FastAPI:
+class FrontendBuildMissingError(RuntimeError):
+    """Raised when the browser server is started before the SPA is built."""
+
+
+def frontend_build_missing_message(path: Path = FRONTEND_DIST) -> str:
+    return (
+        f"Frontend build not found at {path}. "
+        "Build it with `cd frontend && npm install && npm run build`, "
+        "then run `meeple` again. For frontend development, run "
+        "`cd frontend && npm run dev` with the FastAPI server on port 8000."
+    )
+
+
+def create_app(
+    store: MatchStore | None = None,
+    *,
+    frontend_dist: Path | None = FRONTEND_DIST,
+) -> FastAPI:
     # `store` is injectable so tests can seed a fixed deal via
     # MatchStore.create(seed=...) and then drive that match over HTTP — the
     # public API deliberately offers no client seed (see CreateMatchRequest).
@@ -129,7 +146,9 @@ def create_app(store: MatchStore | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(e)) from None
         return match.envelope(seat, include_meta=False)
 
-    if _FRONTEND_DIST.is_dir():
-        app.mount("/", StaticFiles(directory=_FRONTEND_DIST, html=True), name="frontend")
+    if frontend_dist is not None:
+        if not frontend_dist.is_dir():
+            raise FrontendBuildMissingError(frontend_build_missing_message(frontend_dist))
+        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
 
     return app

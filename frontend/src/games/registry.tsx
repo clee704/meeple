@@ -1,13 +1,14 @@
 import { memo, type ComponentType, type ReactNode } from 'react'
-import type { HistoryEntry, LegalAction } from '../types'
+import type { Envelope, HistoryEntry, LegalAction } from '../types'
 import { KahunaBoard } from './KahunaBoard'
 import { KuhnBoard } from './KuhnBoard'
 
 // The per-game plugin contract: everything a renderer gets is either
 // game-defined SPI output (observation/meta, opaque to the shell) or the
 // generic turn plumbing. A renderer's one output is submitAction(id); it
-// resolves true iff the server accepted the action, so a renderer can chain
-// several actions in one gesture and stop as soon as one is rejected.
+// resolves to the accepted envelope, or false if the server rejected it, so
+// a renderer can chain several actions in one gesture and stop as soon as a
+// move is rejected or finishes the match.
 export interface GameRendererProps {
   observation: unknown
   meta: Record<string, unknown>
@@ -16,7 +17,7 @@ export interface GameRendererProps {
   legalActions: LegalAction[]
   history: HistoryEntry[]
   result: Record<string, unknown> | null
-  submitAction: (action: number) => Promise<boolean>
+  submitAction: (action: number) => Promise<Envelope | false>
   // Optional: hand the shell a node to show in the match HUD (e.g. score /
   // round). Generic — the shell never inspects it; it just slots it into the
   // header on wide screens and the kebab menu on narrow ones. Pass null to

@@ -253,8 +253,9 @@ export function MatchScreen({
   const submitAction = useCallback(
     async (action: number) => {
       try {
-        absorb(await postAction(session, action))
-        return true
+        const next = await postAction(session, action)
+        absorb(next)
+        return next
       } catch (err) {
         if (err instanceof ApiError) onError(err.message)
         else onError(String(err))
