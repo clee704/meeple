@@ -5,6 +5,7 @@ import { playSound } from '../sound'
 import type { HistoryEntry, LegalAction } from '../types'
 import type { GameRendererProps } from './registry'
 import { matchSelection, payOptionsByBridge } from './kahunaSelect'
+import './kahuna.css'
 
 // Shape of meeple/games/kahuna/view.py's observation/meta payloads (the
 // fields this renderer uses).
@@ -20,6 +21,7 @@ interface KahunaObservation {
   opponent_hidden_discard_count: number
   scores: number[]
   scoring_count: number
+  round_points: number[][]
   final_turns_remaining: number | null
 }
 
@@ -121,6 +123,9 @@ function recentTurns(history: HistoryEntry[]): HistoryEntry[] {
   return history.slice()
 }
 
+// Score-sheet row labels: rounds 1 and 2, then the final scoring.
+const roundLabel = (i: number) => (i === 2 ? 'Final round' : 'Round ' + (i + 1))
+
 export function KahunaBoard({
   observation,
   meta,
@@ -164,12 +169,19 @@ export function KahunaBoard({
 
   // A line/bridge is selectable iff adding it keeps every selected
   // line/bridge payable out of the selected cards — so with nothing
-  // selected, nothing highlights.
-  const canAdd = (pos: number): boolean => {
-    const opts = optionsByPos.get(pos)
-    if (!opts) return false
-    return matchSelection([...selOptions, opts], selNames, false) !== null
-  }
+  // selected, nothing highlights. Computed as one memoized set: the
+  // backtracking search must not rerun per bridge on every animation-timer
+  // re-render.
+  const addable = useMemo(() => {
+    const ok = new Set<number>()
+    if (!yourTurn) return ok
+    for (const [pos, opts] of optionsByPos)
+      if (matchSelection([...selOptions, opts], selNames, false) !== null) ok.add(pos)
+    return ok
+    // selOptions/selNames derive from sel, obs.hand and optionsByPos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [yourTurn, optionsByPos, sel, obs.hand])
+  const canAdd = (pos: number) => addable.has(pos)
 
   const toggleCard = (i: number) => {
     if (selCards.includes(i)) {
@@ -284,13 +296,22 @@ export function KahunaBoard({
       : drawSel !== null
         ? byKind('take_faceup').find((x) => x.meta.slot === drawSel)
         : undefined
+
+  // Structurally impossible actions gray out: no legal place/remove at all,
+  // no legal draw source, no legal skip. (A merely incomplete selection
+  // keeps its button live and explains what is missing on tap.)
+  const canPlay = optionsByPos.size > 0
+  const canDraw = Boolean(drawBlind) || byKind('take_faceup').length > 0
   const round = Math.min(obs.scoring_count + 1, 3)
   const discardCount =
     obs.discard.length + obs.my_hidden_discards.length + obs.opponent_hidden_discard_count
 
-  // The three always-live buttons on your turn (Play / Draw / Skip). Each is
-  // enabled and, when nothing's selected to act on, says what's missing
-  // rather than sitting disabled.
+  // A real game end — a forfeit carries no points and the HUD verdict
+  // already covers it — shows the persistent score sheet below the hand.
+  const gameOver = result !== null && 'points' in result
+
+  // The Play / Draw / Skip buttons on your turn; see the gray-out rules
+  // above for when each is disabled outright.
   const play = () => {
     if (selCards.length === 0)
       return void ask('Pick a card from your hand first, then the lines or bridges it pays for.', { alert: true })
@@ -300,10 +321,6 @@ export function KahunaBoard({
   const drawOrPrompt = () => {
     if (!drawAction) return void ask('Pick a face-up card or the draw pile first.', { alert: true })
     draw(drawAction)
-  }
-  const skipTurn = () => {
-    if (!skip) return void ask("You can't skip right now.", { alert: true })
-    skipDraw(skip)
   }
 
   // Opponent plays go through one serialized queue, one entry per update
@@ -381,6 +398,11 @@ export function KahunaBoard({
     if (added.some((h) => h.actor !== seat && (h.meta.kind === 'place' || h.meta.kind === 'remove')))
       playSound('play')
     if (added.some((h) => h.actor !== seat && h.meta.kind === 'discard')) playSound('discard')
+    // A draw sounds for both players (a draw is a single action per turn,
+    // so there is no per-batch dedup to worry about); the floating-card
+    // visual cue below stays opponent-only.
+    if (added.some((h) => h.meta.kind === 'draw_blind' || h.meta.kind === 'take_faceup'))
+      playSound('draw')
     const draw = added.find(
       (h) => h.actor !== seat && (h.meta.kind === 'draw_blind' || h.meta.kind === 'take_faceup'),
     )
@@ -551,7 +573,7 @@ export function KahunaBoard({
               const [x2, y2] = POS[b]
               const owner = shownBoard.bridges[pos]
               const selected = selBridges.includes(pos)
-              const active = selected || (yourTurn && canAdd(pos))
+              const active = selected || canAdd(pos)
               const base =
                 owner === null
                   ? selected
@@ -754,13 +776,13 @@ export function KahunaBoard({
         </div>
         {yourTurn && (
           <div className="action-row kahuna-actions">
-            <button disabled={busy} onClick={play}>
+            <button disabled={busy || !canPlay} onClick={play}>
               Play
             </button>
-            <button disabled={busy} onClick={drawOrPrompt}>
+            <button disabled={busy || !canDraw} onClick={drawOrPrompt}>
               Draw
             </button>
-            <button disabled={busy} onClick={skipTurn}>
+            <button disabled={busy || !skip} onClick={() => skipDraw(skip)}>
               Skip
             </button>
             {canDiscard && (
@@ -771,6 +793,41 @@ export function KahunaBoard({
           </div>
         )}
       </div>
+
+      {/* Persistent end-of-game score sheet: the transient round overlays
+          vanish after a few seconds, so once the game is over the totals
+          and the per-round breakdown stay reviewable here. */}
+      {gameOver && (
+        <div>
+          <h3>Final score</h3>
+          <table className="kahuna-score-table">
+            <thead>
+              <tr>
+                <th />
+                <th>You</th>
+                <th>Opponent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {obs.round_points.map((pts, i) => (
+                <tr key={i}>
+                  <th>{roundLabel(i)}</th>
+                  <td>+{pts[seat]}</td>
+                  <td>+{pts[1 - seat]}</td>
+                </tr>
+              ))}
+              <tr className="kahuna-score-total">
+                <th>Total</th>
+                <td>{obs.scores[seat]}</td>
+                <td>{obs.scores[1 - seat]}</td>
+              </tr>
+            </tbody>
+          </table>
+          {result?.premature === true && (
+            <p className="dim">Won early by knockout: the loser had no bridges on the board.</p>
+          )}
+        </div>
+      )}
 
       <div className="kahuna-log-bar">
         <h3>Log</h3>

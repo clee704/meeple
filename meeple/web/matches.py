@@ -6,16 +6,20 @@ behind the same `MatchStore` methods."""
 import random
 import secrets
 import time
+from bisect import bisect_right
 from dataclasses import dataclass, field
 
 from meeple.framework import registry
 from meeple.framework.chance import resolve_chance
 from meeple.framework.game import Game, State
-from meeple.framework.view import GameView
+from meeple.framework.view import GameView, winner_from_scores
 
 # Join codes avoid easily-confused characters (0/O, 1/I/L).
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 _CODE_LENGTH = 5
+# A match untouched (created/joined/acted on/left) for this long is evicted
+# on the next create; keeps a long-running host's memory bounded.
+_EVICT_IDLE_SECONDS = 24 * 60 * 60
 
 
 class MatchError(Exception):
@@ -55,6 +59,10 @@ class Match:
     # One history per seat: entries are pre-masked by `describe_action` at
     # append time, so a viewer's log never holds what they may not see.
     histories: list[list[dict]]
+    # entry_versions[i] is the match version at which histories[*][i] was
+    # appended (one action = one entry for every seat), so a poller's `since`
+    # doubles as its history cursor.
+    entry_versions: list[int] = field(default_factory=list)
     version: int = 1
     forfeited_by: int | None = None
     canceled: bool = False
@@ -64,6 +72,9 @@ class Match:
     started_at: float | None = None  # monotonic; set when the last seat fills
     turn_started_at: float | None = None  # monotonic; reset when the turn passes
     finished_at: float | None = None
+    # Last lifecycle mutation (create/join/apply/leave), monotonic — drives
+    # the store's idle eviction.
+    touched_at: float = field(default_factory=time.monotonic)
 
     @property
     def status(self) -> str:
@@ -90,6 +101,7 @@ class Match:
         else:
             raise IllegalActionError(f"match is {self.status}, cannot be left")
         self.finished_at = time.monotonic()
+        self.touched_at = time.monotonic()
         self.version += 1
 
     def apply(self, seat: int, action: int) -> None:
@@ -115,10 +127,17 @@ class Match:
         elif self.state.current_player() != seat:
             self.turn_count += 1
             self.turn_started_at = time.monotonic()
+        self.touched_at = time.monotonic()
         self.version += 1
+        self.entry_versions.append(self.version)
 
-    def envelope(self, seat: int, include_meta: bool) -> dict:
+    def envelope(self, seat: int, include_meta: bool, since: int | None = None) -> dict:
         spec = self.game.spec()
+        history = self.histories[seat]
+        # The poller's `since` doubles as a history cursor: entries appended
+        # at versions <= since are already on the client, so only newer ones
+        # ride along (bisect works because entry_versions is ascending).
+        history_from = 0 if since is None else bisect_right(self.entry_versions, since)
         in_progress = self.status == "in_progress"
         your_turn = in_progress and self.state.current_player() == seat
         env = {
@@ -133,7 +152,10 @@ class Match:
                 {"action": a, "name": spec.action_names[a], "meta": self.view.action_metadata(a)}
                 for a in (self.state.legal_actions() if your_turn else [])
             ],
-            "history": list(self.histories[seat]),
+            # Only the entries the caller doesn't have yet; the client
+            # stitches them onto its copy (see history_from above).
+            "history": history[history_from:],
+            "history_from": history_from,
             "result": self._result(),
             "forfeited_by": self.forfeited_by,
             "turn_count": self.turn_count,
@@ -159,13 +181,10 @@ class Match:
         if self.forfeited_by is not None:
             # A forfeit isn't a game-engine outcome, so it's scored here
             # rather than via the view: the forfeiting seat loses outright,
-            # and every remaining seat ties for the win. Same
-            # highest-score-wins/tie-is-a-draw convention as GameView.result.
+            # and every remaining seat ties for the win.
             num_players = len(self.tokens)
             scores = [-1.0 if p == self.forfeited_by else 1.0 for p in range(num_players)]
-            best = max(scores)
-            winners = [p for p, s in enumerate(scores) if s == best]
-            winner = winners[0] if len(winners) == 1 else None
+            winner = winner_from_scores(scores)
             return {"scores": scores, "winner": winner}
         return self.view.result(self.state) if self.state.is_terminal() else None
 
@@ -178,6 +197,7 @@ class MatchStore:
     def create(
         self, game_id: str, seed: int | None = None, creator_seat: int = 0
     ) -> tuple[Match, str]:
+        self._evict_idle()
         view = registry.make_view(game_id)  # KeyError for games without a web view
         game = registry.make(game_id)
         rng = random.Random(secrets.randbits(64) if seed is None else seed)
@@ -217,6 +237,7 @@ class MatchStore:
         if None not in match.tokens:
             match.started_at = time.monotonic()  # the clock runs on play, not waiting
             match.turn_started_at = match.started_at
+        match.touched_at = time.monotonic()
         match.version += 1  # wakes the creator's poll: status flips to in_progress
         return match, seat, token
 
@@ -225,6 +246,16 @@ class MatchStore:
             return self._matches[match_id]
         except KeyError:
             raise UnknownMatchError(f"unknown match {match_id!r}") from None
+
+    def _evict_idle(self) -> None:
+        """Drop matches (abandoned lobbies, finished or deserted games) whose
+        last lifecycle event is older than the TTL. Run on create, so memory
+        stays bounded on a long-running host without a background reaper."""
+        now = time.monotonic()
+        expired = [m for m in self._matches.values() if now - m.touched_at > _EVICT_IDLE_SECONDS]
+        for match in expired:
+            del self._matches[match.match_id]
+            del self._by_code[match.join_code]
 
     def _new_join_code(self) -> str:
         while True:

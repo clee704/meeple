@@ -3,13 +3,14 @@ package top level (like `serve.py` itself) because it deliberately spans the
 seam: it drives the generic `meeple.web` app with the real registered games."""
 
 import random
+import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 import meeple.games  # noqa: F401 — side effect: registers games + views
 from meeple.web.app import create_app
-from meeple.web.matches import MatchStore
+from meeple.web.matches import _EVICT_IDLE_SECONDS, MatchStore, UnknownMatchError
 
 
 @pytest.fixture
@@ -81,6 +82,9 @@ def test_lists_games_with_views(client):
     games = {g["game_id"]: g for g in client.get("/api/games").json()}
     assert set(games) == {"kuhn", "kahuna"}
     assert games["kahuna"]["num_players"] == 2
+    # Seat labels ride along from the game meta (none for kuhn).
+    assert games["kahuna"]["seat_names"] == ["Black", "White"]
+    assert games["kuhn"]["seat_names"] is None
 
 
 def test_create_then_waiting_state(client):
@@ -313,3 +317,36 @@ def test_serve_module_exposes_the_wired_app():
     import meeple.serve
 
     assert meeple.serve.app.title == "MeepleMind"
+
+
+def test_idle_matches_are_evicted_on_the_next_create(store, monkeypatch):
+    stale, _token = store.create("kuhn")
+    now = time.monotonic()
+    monkeypatch.setattr(time, "monotonic", lambda: now + _EVICT_IDLE_SECONDS + 1)
+    fresh, _token2 = store.create("kuhn")
+    with pytest.raises(UnknownMatchError):
+        store.get(stale.match_id)
+    # The just-created match is inside its TTL and survives the sweep.
+    assert store.get(fresh.match_id) is fresh
+
+
+def test_polling_sends_only_history_entries_newer_than_since(client, store):
+    created = _seed(store)
+    joined = _join(client, created["join_code"])
+    match_id = created["match_id"]
+    tokens = [created["token"], joined["token"]]
+    env = _state(client, match_id, tokens[0])
+    first = env["legal_actions"][0]["action"]
+    assert _act(client, match_id, tokens[0], first).status_code == 200
+    seen = _state(client, match_id, tokens[0])
+    assert seen["history_from"] == 0  # a fresh fetch always gets everything
+    mover = seen["to_move"]
+    mover_env = _state(client, match_id, tokens[mover])
+    second = mover_env["legal_actions"][0]["action"]
+    assert _act(client, match_id, tokens[mover], second).status_code == 200
+    delta = _state(client, match_id, tokens[0], since=seen["version"])
+    full = _state(client, match_id, tokens[0])
+    assert delta["history_from"] == len(seen["history"])
+    assert len(delta["history"]) >= 1
+    assert full["history_from"] == 0
+    assert full["history"][delta["history_from"] :] == delta["history"]

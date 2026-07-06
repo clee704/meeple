@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { Overlay } from './Overlay'
 
 interface Options {
@@ -22,21 +22,35 @@ export function useConfirm(): [
   (message: string, opts?: Options) => Promise<boolean>,
 ] {
   const [pending, setPending] = useState<Pending | null>(null)
+  // Mirrors the pending state synchronously (state updates lag a render):
+  // a second ask() must see and resolve the one it replaces even when both
+  // fire between renders, so the superseded awaiter never hangs. Resolving
+  // an already-resolved promise is a no-op, so this stays safe if a dialog
+  // is answered and immediately replaced.
+  const pendingRef = useRef<Pending | null>(null)
+
+  const show = (next: Pending) => {
+    pendingRef.current?.resolve(false)
+    pendingRef.current = next
+    setPending(next)
+  }
 
   const ask = (message: string, opts: Options = {}) =>
     new Promise<boolean>((resolve) => {
-      setPending({
+      const next = {
         message,
         confirmLabel: opts.confirmLabel ?? 'OK',
         danger: opts.danger ?? false,
         alert: opts.alert ?? false,
         resolve,
-      })
+      }
+      show(next)
     })
 
   const close = (ok: boolean) => {
     pending?.resolve(ok)
     setPending(null)
+    pendingRef.current = null
   }
 
   const dialog = pending && (

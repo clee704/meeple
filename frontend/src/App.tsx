@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { clearSession, joinMatch, loadSession, saveSession } from './api'
 import { Lobby } from './Lobby'
 import { MatchScreen } from './MatchScreen'
@@ -7,6 +7,11 @@ import type { Session } from './types'
 export default function App() {
   const [session, setSession] = useState<Session | null>(loadSession)
   const [toast, setToast] = useState<string | null>(null)
+  // True only when the session was entered on this page-load (a create/join
+  // action), not restored from storage: a fresh creator session is known to
+  // have started out waiting, even if the opponent joins before the first
+  // poll observes it (see MatchScreen and its join chime).
+  const fresh = useRef(false)
 
   const showError = useCallback((msg: string) => {
     setToast(msg)
@@ -15,6 +20,7 @@ export default function App() {
 
   const enter = useCallback((s: Session) => {
     saveSession(s)
+    fresh.current = true
     setSession(s)
   }, [])
 
@@ -44,7 +50,13 @@ export default function App() {
   return (
     <main>
       {session ? (
-        <MatchScreen key={session.matchId} session={session} onExit={exit} onError={showError} />
+        <MatchScreen
+          key={session.matchId}
+          session={session}
+          freshlyCreated={fresh.current && session.joinCode !== undefined}
+          onExit={exit}
+          onError={showError}
+        />
       ) : (
         <Lobby onEnter={enter} onError={showError} />
       )}

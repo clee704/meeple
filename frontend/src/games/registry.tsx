@@ -31,11 +31,3 @@ export const renderers: Record<string, ComponentType<GameRendererProps>> = {
   kahuna: memo(KahunaBoard),
   kuhn: memo(KuhnBoard),
 }
-
-// Seat labels for games where the lobby offers a seat choice, indexed by
-// seat. Seat 0 always moves first (an engine-level rule), so for Kahuna the
-// house rule is: Black plays first. Games without labels get a single
-// create button that takes seat 0.
-export const seatNames: Record<string, string[]> = {
-  kahuna: ['Black', 'White'],
-}

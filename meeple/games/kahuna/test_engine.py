@@ -623,3 +623,14 @@ def test_played_card_this_turn_is_tracked_and_visible_in_information_state():
     assert after.played_card_this_turn is True
     assert after.information_state_key(0) != before.information_state_key(0)
     assert after.information_state_tensor(0).tolist() != before.information_state_tensor(0).tolist()
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_round_points_log_matches_final_scores(seed):
+    # The public per-round scoring log must account for every point on the
+    # final tally, and a naturally finished game logs all three scorings.
+    final = _random_playthrough(KahunaGame().new_initial_state(), random.Random(seed))
+    totals = (sum(p[0] for p in final.round_points), sum(p[1] for p in final.round_points))
+    assert totals == final.scores
+    if final.premature_winner is None:
+        assert len(final.round_points) == 3

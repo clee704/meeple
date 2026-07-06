@@ -12,6 +12,15 @@ from abc import ABC, abstractmethod
 from meeple.framework.game import Action, State
 
 
+def winner_from_scores(scores: list[float]) -> int | None:
+    """The default winner convention: highest score wins, a tie is a draw
+    (`None`). Shared so every scores-only verdict (natural finishes without
+    a game tiebreak, the web layer's forfeits) stays on one algorithm."""
+    best = max(scores)
+    winners = [p for p, s in enumerate(scores) if s == best]
+    return winners[0] if len(winners) == 1 else None
+
+
 class GameView(ABC):
     @abstractmethod
     def observation(self, state: State, viewer: int) -> dict:
@@ -37,11 +46,14 @@ class GameView(ABC):
         highest `returns()` entry the winner, or a draw (`None`) on a tie;
         override when the game has its own tiebreak."""
         scores = state.returns()
-        best = max(scores)
-        winners = [p for p, s in enumerate(scores) if s == best]
-        return {"scores": scores, "winner": winners[0] if len(winners) == 1 else None}
+        return {"scores": scores, "winner": winner_from_scores(scores)}
 
     def game_meta(self) -> dict:
         """Static bootstrap data for the renderer (board topology etc.),
         sent once per match."""
         return {}
+
+    def seat_names(self) -> list[str] | None:
+        """Lobby seat labels indexed by seat (seat 0 moves first), or None
+        when the game offers no meaningful seat choice at create time."""
+        return None

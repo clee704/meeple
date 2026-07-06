@@ -37,6 +37,9 @@ class KahunaView(GameView):
             "opponent_hidden_discard_count": len(state.hidden_discards[opponent]),
             "scores": list(state.scores),
             "scoring_count": state.scoring_count,
+            # Public scoring log — one (p0, p1) pair of points awarded per
+            # completed scoring round; drives the end-of-game breakdown.
+            "round_points": [list(points) for points in state.round_points],
             "to_move": None if state.is_terminal() else state.to_move,
             "previous_turn_was_skip": state.previous_turn_was_skip,
             "discarded_this_turn": state.discarded_this_turn,
@@ -96,3 +99,7 @@ class KahunaView(GameView):
             "bridges": [list(pair) for pair in BRIDGES],
             "majority": dict(MAJORITY),
         }
+
+    def seat_names(self) -> list[str] | None:
+        # House rule for the web lobby: Black is seat 0 and moves first.
+        return ["Black", "White"]

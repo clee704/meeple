@@ -25,6 +25,9 @@ export interface Envelope {
   observation: unknown
   legal_actions: LegalAction[]
   history: HistoryEntry[]
+  // Index into the full history that `history` starts at: a poll passing
+  // `since` receives only newer entries and splices them on at this offset.
+  history_from: number
   result: Record<string, unknown> | null
   forfeited_by: number | null
   turn_count: number
@@ -36,6 +39,9 @@ export interface Envelope {
 export interface GameInfo {
   game_id: string
   num_players: number
+  // Lobby seat labels indexed by seat (from the game meta); null/absent when
+  // the game offers no seat choice.
+  seat_names?: string[] | null
 }
 
 // What a browser needs to keep acting as one seat of one match.

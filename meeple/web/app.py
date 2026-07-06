@@ -51,10 +51,15 @@ def create_app(store: MatchStore | None = None) -> FastAPI:
 
     @app.get("/api/games")
     async def list_games() -> list[dict]:
-        return [
+        games = [
             {"game_id": game_id, "num_players": registry.make(game_id).spec().num_players}
             for game_id in registry.games_with_views()
         ]
+        for info in games:
+            # Lobby seat labels (e.g. Kahuna Black/White) ride along from
+            # the game view, so the frontend needs no per-game map of its own.
+            info["seat_names"] = registry.make_view(info["game_id"]).seat_names()
+        return games
 
     @app.post("/api/matches", status_code=201)
     async def create_match(req: CreateMatchRequest) -> dict:
@@ -97,8 +102,10 @@ def create_app(store: MatchStore | None = None) -> FastAPI:
         if since is not None and match.version == since:
             return {"changed": False, "version": match.version}
         # `meta` (static renderer bootstrap) only accompanies the initial
-        # fetch — pollers pass `since` and never re-download it.
-        return match.envelope(seat, include_meta=since is None)
+        # fetch — pollers pass `since` and never re-download it. `since`
+        # also serves as the history cursor: only entries appended after
+        # that version ride along.
+        return match.envelope(seat, include_meta=since is None, since=since)
 
     @app.post("/api/matches/{match_id}/actions")
     async def post_action(

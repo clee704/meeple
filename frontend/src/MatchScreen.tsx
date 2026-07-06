@@ -4,7 +4,7 @@ import { useConfirm } from './Confirm'
 import { renderers } from './games/registry'
 import { playSound } from './sound'
 import { useEscapeToClose } from './useEscapeToClose'
-import type { Envelope, Session } from './types'
+import type { Envelope, MatchStatus, Session } from './types'
 
 const POLL_MS = 1000
 
@@ -152,10 +152,14 @@ function Hud({
 
 export function MatchScreen({
   session,
+  freshlyCreated = false,
   onExit,
   onError,
 }: {
   session: Session
+  // The creator entered this match moments ago (vs restoring a stored
+  // session on reload): it necessarily started out waiting.
+  freshlyCreated?: boolean
   onExit: () => void
   onError: (msg: string) => void
 }) {
@@ -167,16 +171,25 @@ export function MatchScreen({
   const absorbedAtRef = useRef(Date.now())
 
   const absorb = useCallback((e: Envelope) => {
-    envRef.current = e
+    // Polls receive only the history entries newer than their since-version
+    // (history_from > 0) — splice them onto the prefix already held.
+    const prev = envRef.current
+    const merged =
+      e.history_from > 0 && prev
+        ? { ...e, history: [...prev.history.slice(0, e.history_from), ...e.history] }
+        : e
+    envRef.current = merged
     absorbedAtRef.current = Date.now()
-    setEnv(e)
+    setEnv(merged)
     if (e.meta) setMeta(e.meta)
   }, [])
 
   // Ding when the opponent joins — the creator is usually waiting in
   // another tab or across the room. Only on the observed transition, so a
-  // reload of an in-progress match stays quiet.
-  const prevStatus = useRef(env?.status)
+  // reload of an in-progress match stays quiet. A freshly created match
+  // observably started out waiting, so it may chime even if the opponent
+  // joined before the first poll resolved.
+  const prevStatus = useRef<MatchStatus | undefined>(freshlyCreated ? 'waiting' : undefined)
   useEffect(() => {
     const prev = prevStatus.current
     prevStatus.current = env?.status
@@ -215,8 +228,9 @@ export function MatchScreen({
     const tick = async (initial: boolean) => {
       try {
         const resp = await getState(session, initial ? undefined : envRef.current?.version)
-        if (stopped || !('observation' in resp)) return // unchanged since last poll
-        absorb(resp)
+        if (stopped) return
+        // An unchanged poll (no envelope in the response) still reschedules.
+        if ('observation' in resp) absorb(resp)
       } catch (err) {
         if (!stopped && err instanceof ApiError && (err.status === 404 || err.status === 403)) {
           onError('Match no longer exists on the server.')

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { createMatch, joinMatch, listGames } from './api'
-import { seatNames } from './games/registry'
 import { playSound } from './sound'
 import type { GameInfo, Session } from './types'
 
@@ -36,7 +35,7 @@ export function Lobby({ onEnter, onError }: { onEnter: (s: Session) => void; onE
       <h2>Start a match</h2>
       <div className="game-list">
         {games.map((g) => {
-          const names = seatNames[g.game_id]
+          const names = g.seat_names
           if (!names) {
             return (
               <button key={g.game_id} onClick={() => create(g.game_id)}>
