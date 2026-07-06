@@ -25,7 +25,7 @@ Splendor, Patchwork).
 
 `ai/`, `eval/`, and `web/` import only `framework/`; a game is reached only
 through the `Game`/`State` interface, described by a `GameSpec`, and
-discovered via a registry. See [`CLAUDE.md`](CLAUDE.md) for the full set of
+discovered via a registry. See [`AGENTS.md`](AGENTS.md) for the full set of
 operating rules and hard gates, and [`PLAN.md`](PLAN.md) for the phased
 roadmap.
 
@@ -40,5 +40,5 @@ uv run pre-commit run -a # lint + hygiene checks
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for commit/PR conventions, and
-[`CLAUDE.md`](CLAUDE.md) for the project's hard gates (rules-first game
+[`AGENTS.md`](AGENTS.md) for the project's hard gates (rules-first game
 onboarding, the framework/games seam, test requirements).

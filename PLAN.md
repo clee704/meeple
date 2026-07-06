@@ -6,7 +6,7 @@
 > and a from-scratch CFR stack for ML learning. Hostable from this machine behind
 > Cloudflare.
 >
-> **Before coding, read `CLAUDE.md`** (operating rules + hard gates — this
+> **Before coding, read `AGENTS.md`** (operating rules + hard gates — this
 > doc is the *what*, that one is the *how*). For a game's rules,
 > `meeple/games/<g>/RULES.md` is authoritative.
 >
@@ -33,7 +33,7 @@
 5. **Reuse for other games:** the engine interface, AI, eval, and web backend
    must work for **Quarto, Splendor, Patchwork** with **no core changes** —
    adding a game = rules contract + engine + adapter + renderer (see the
-   per-game recipe in `CLAUDE.md`).
+   per-game recipe in `AGENTS.md`).
 
 ### Scoping goal #3 (so it doesn't become infinite)
 "From scratch" = your interface + engines + tabular CFR + Deep CFR + an
@@ -64,11 +64,11 @@ breadth. OpenSpiel stays the oracle you cross-check CFR against on Kuhn/Leduc.
   (`num_players`, `perfect_information`, `has_chance`, `zero_sum`,
   `num_distinct_actions`, action labels), and discovered via a **registry**.
 - The AI layer picks a compatible solver from the **solver-compatibility matrix
-  in `CLAUDE.md`** using the `GameSpec` (e.g. CFR only for 2p zero-sum
+  in `AGENTS.md`** using the `GameSpec` (e.g. CFR only for 2p zero-sum
   imperfect-info; MCTS for perfect-info; ISMCTS for imperfect-info; heuristic
   always). **CFR does not generalize to Quarto/Patchwork/Splendor — MCTS/ISMCTS
   does.**
-- The interface's current shape is a best guess, not final — see CLAUDE.md's
+- The interface's current shape is a best guess, not final — see AGENTS.md's
   P1: if a game keeps forcing awkward workarounds, that's signal to
   deliberately revise `Game`/`State`, not route around it.
 
@@ -132,7 +132,7 @@ class Game(ABC):
 This interface must be general enough for: 2p vs n-player (`returns` is a list),
 perfect vs imperfect info, chance vs no chance. If a new game needs a change
 here, that's a deliberate interface revision (propose it, don't route around
-it — CLAUDE.md G8), not a quick patch.
+it — AGENTS.md G8), not a quick patch.
 
 A game opts into the web UI by also registering a **`GameView`**
 (`meeple/framework/view.py`) next to its `Game`: per-player JSON
@@ -149,7 +149,7 @@ by game id in `frontend/src/games/registry.tsx`.
 Each phase's Definition of Done, checklist, and running log of decisions lives
 in its GitHub issue (label `phase`). Don't start a phase before the previous
 one's issue is closed. **[platform]** = build once & reuse; **[per-game]** =
-repeat via the onboarding recipe in `CLAUDE.md`.
+repeat via the onboarding recipe in `AGENTS.md`.
 
 | # | Phase | Tag | Scope | Issue |
 |---|-------|-----|-------|-------|
@@ -193,8 +193,8 @@ meeple/                         # the importable package (from meeple.framework 
 frontend/     React+Vite SPA — src/ shell + src/games/ per-game renderers; dist/ served by the backend
 docs/         RULES_TEMPLATE.md
 deploy/       cloudflared.yml  meeple.service  # Phase 9
-CLAUDE.md  PLAN.md  pyproject.toml
+AGENTS.md  CLAUDE.md  PLAN.md  pyproject.toml
 ```
 
 Rule of thumb: if a file names a game, it lives under `meeple/games/<g>/`. If it's in
-`framework/ai/eval/web`, it must not name any game (CLAUDE.md G2/G5).
+`framework/ai/eval/web`, it must not name any game (AGENTS.md G2/G5).
