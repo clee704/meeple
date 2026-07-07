@@ -4,8 +4,19 @@ import { Lobby } from './Lobby'
 import { MatchScreen } from './MatchScreen'
 import type { Session } from './types'
 
+function joinCodeFromHash(): string | null {
+  return location.hash.match(/^#\/join\/([A-Za-z0-9]+)$/)?.[1].toUpperCase() ?? null
+}
+
+function loadInitialSession(): Session | null {
+  const code = joinCodeFromHash()
+  const stored = loadSession()
+  if (!code) return stored
+  return stored?.joinCode?.toUpperCase() === code ? stored : null
+}
+
 export default function App() {
-  const [session, setSession] = useState<Session | null>(loadSession)
+  const [session, setSession] = useState<Session | null>(loadInitialSession)
   const [toast, setToast] = useState<string | null>(null)
   // True only when the session was entered on this page-load (a create/join
   // action), not restored from storage: a fresh creator session is known to
@@ -33,11 +44,12 @@ export default function App() {
   // session — an explicit link click wins over a stale game).
   useEffect(() => {
     const handle = async () => {
-      const match = location.hash.match(/^#\/join\/([A-Za-z0-9]+)$/)
-      if (!match) return
-      history.replaceState(null, '', location.pathname)
+      const code = joinCodeFromHash()
+      if (!code) return
+      history.replaceState(null, '', location.pathname + location.search)
+      if (session?.joinCode?.toUpperCase() === code) return
       try {
-        enter(await joinMatch(match[1]))
+        enter(await joinMatch(code))
       } catch (e) {
         showError(String(e))
       }
@@ -45,7 +57,7 @@ export default function App() {
     handle()
     window.addEventListener('hashchange', handle)
     return () => window.removeEventListener('hashchange', handle)
-  }, [enter, showError])
+  }, [enter, session?.joinCode, showError])
 
   return (
     <main>

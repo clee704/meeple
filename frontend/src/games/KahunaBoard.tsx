@@ -58,6 +58,7 @@ const VIEWBOX = '202 117 386 306'
 // One-shot per browser: set once the drawing-ends-your-turn reminder has
 // been shown, so it never fires again.
 const DRAW_NOTICE_KEY = 'meeple.kahuna.draw-notice'
+const BRIDGE_SUPPLY = 25
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
 const SEAT_LABEL = ['var(--p0-ink)', 'var(--p1-ink)']
 // Island labels hold this on-screen size however far the board is scaled
@@ -82,6 +83,15 @@ function cardStack(count: number, classFor: (i: number) => string) {
       />
     )
   })
+}
+
+function withoutSpent(cards: string[], spent: string[]): string[] {
+  const next = [...cards]
+  for (const card of spent) {
+    const at = next.indexOf(card)
+    if (at >= 0) next.splice(at, 1)
+  }
+  return next
 }
 
 function historyLine(h: HistoryEntry, seat: number): string {
@@ -166,6 +176,8 @@ export function KahunaBoard({
 
   const selNames = selCards.map((i) => obs.hand[i])
   const selOptions = selBridges.map((pos) => optionsByPos.get(pos) ?? [])
+  const remainingBridgeSupply = BRIDGE_SUPPLY - obs.bridges.filter((owner) => owner === seat).length
+  const selectedPlacementCount = selBridges.filter((pos) => obs.bridges[pos] === null).length
 
   // A line/bridge is selectable iff adding it keeps every selected
   // line/bridge payable out of the selected cards — so with nothing
@@ -175,12 +187,14 @@ export function KahunaBoard({
   const addable = useMemo(() => {
     const ok = new Set<number>()
     if (!yourTurn) return ok
-    for (const [pos, opts] of optionsByPos)
+    for (const [pos, opts] of optionsByPos) {
+      if (obs.bridges[pos] === null && selectedPlacementCount >= remainingBridgeSupply) continue
       if (matchSelection([...selOptions, opts], selNames, false) !== null) ok.add(pos)
+    }
     return ok
     // selOptions/selNames derive from sel, obs.hand and optionsByPos.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [yourTurn, optionsByPos, sel, obs.hand])
+  }, [yourTurn, optionsByPos, sel, obs.hand, remainingBridgeSupply, selectedPlacementCount])
   const canAdd = (pos: number) => addable.has(pos)
 
   const toggleCard = (i: number) => {
@@ -210,7 +224,7 @@ export function KahunaBoard({
     (a, b) => Number(obs.bridges[a] === null) - Number(obs.bridges[b] === null),
   )
   const plan =
-    selBridges.length > 0
+    selBridges.length > 0 && selectedPlacementCount <= remainingBridgeSupply
       ? matchSelection(
           orderedSel.map((pos) => optionsByPos.get(pos) ?? []),
           selNames,
@@ -231,11 +245,25 @@ export function KahunaBoard({
   const commit = () =>
     run(async () => {
       let accepted = false
-      for (const opt of plan ?? []) {
+      let actions = legalActions
+      let remainingBridges = [...orderedSel]
+      let remainingCards = [...selNames]
+      while (remainingBridges.length > 0) {
+        const available = payOptionsByBridge(actions)
+        const nextPlan = matchSelection(
+          remainingBridges.map((pos) => available.get(pos) ?? []),
+          remainingCards,
+          true,
+        )
+        const opt = nextPlan?.[0]
+        if (!opt) break
         const env = await submitAction(opt.action)
         if (!env) return
         accepted = true
+        remainingCards = withoutSpent(remainingCards, opt.cost)
+        remainingBridges = remainingBridges.slice(1)
         if (env.status === 'finished') break
+        actions = env.legal_actions
       }
       if (accepted) playSound('play') // once for the whole batch (see the sounds effect)
     })
@@ -383,7 +411,11 @@ export function KahunaBoard({
     return () => clearTimeout(t)
   }, [queue])
   const revealed = queue[0]?.cards ?? []
-  // Selection logic keeps using the live obs; only the drawing is held back.
+  const revealActive = queue.length > 0
+  useEffect(() => {
+    if (revealActive) setSel({ mode: 'idle' })
+  }, [revealActive])
+  // Interaction is locked during a reveal; only the drawing is held back.
   const shownBoard = queue[0]?.before ?? { bridges: obs.bridges, control: obs.control }
 
   // New history entries also drive sounds (both players' plays/discards)
@@ -579,7 +611,7 @@ export function KahunaBoard({
               const [x2, y2] = POS[b]
               const owner = shownBoard.bridges[pos]
               const selected = selBridges.includes(pos)
-              const active = selected || canAdd(pos)
+              const active = !revealActive && (selected || canAdd(pos))
               const base =
                 owner === null
                   ? selected
@@ -592,7 +624,13 @@ export function KahunaBoard({
               return (
                 <g
                   key={pos}
-                  className={selected ? 'bridge active selected' : active ? 'bridge active' : 'bridge'}
+                  className={
+                    selected
+                      ? `bridge${active ? ' active' : ''} selected`
+                      : active
+                        ? 'bridge active'
+                        : 'bridge'
+                  }
                   onClick={active ? () => toggleBridge(pos) : undefined}
                 >
                   <line
@@ -717,7 +755,7 @@ export function KahunaBoard({
                       <button
                         className={drawSel === slot ? 'card selected' : 'card'}
                         aria-pressed={drawSel === slot}
-                        disabled={!la}
+                        disabled={revealActive || !la}
                         onClick={() => toggleDrawSel(slot)}
                       >
                         {shown}
@@ -740,7 +778,7 @@ export function KahunaBoard({
             <button
               className={drawSel === 'blind' ? 'pile selected' : 'pile'}
               aria-pressed={drawSel === 'blind'}
-              disabled={!drawBlind}
+              disabled={revealActive || !drawBlind}
               onClick={() => toggleDrawSel('blind')}
               aria-label={`draw pile, ${obs.pile_count} cards`}
             >
@@ -753,7 +791,43 @@ export function KahunaBoard({
           </div>
           <div>
             <h3>Discard ({discardCount})</h3>
-            <div className="pile">{cardStack(discardCount, () => 'card facedown')}</div>
+            <div className="kahuna-discard">
+              {discardCount === 0 && <span className="dim">empty</span>}
+              {obs.discard.length > 0 && (
+                <div className="kahuna-discard-group">
+                  <span className="kahuna-discard-label">Public</span>
+                  <div className="kahuna-discard-chips">
+                    {obs.discard.map((card, i) => (
+                      <span key={`public-${i}`} className="kahuna-discard-chip">
+                        {card}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {obs.my_hidden_discards.length > 0 && (
+                <div className="kahuna-discard-group">
+                  <span className="kahuna-discard-label">Your hidden</span>
+                  <div className="kahuna-discard-chips">
+                    {obs.my_hidden_discards.map((card, i) => (
+                      <span key={`mine-${i}`} className="kahuna-discard-chip own-hidden">
+                        {card}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {obs.opponent_hidden_discard_count > 0 && (
+                <div className="kahuna-discard-group">
+                  <span className="kahuna-discard-label">Opponent hidden</span>
+                  <div className="kahuna-discard-chips">
+                    <span className="kahuna-discard-chip facedown">
+                      ? x{obs.opponent_hidden_discard_count}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -772,7 +846,7 @@ export function KahunaBoard({
                 .filter(Boolean)
                 .join(' ')}
               aria-pressed={selCards.includes(i)}
-              disabled={!yourTurn}
+              disabled={!yourTurn || revealActive}
               onClick={() => toggleCard(i)}
             >
               {card}
@@ -782,17 +856,17 @@ export function KahunaBoard({
         </div>
         {yourTurn && (
           <div className="action-row kahuna-actions">
-            <button disabled={busy || !canPlay} onClick={play}>
+            <button disabled={busy || revealActive || !canPlay} onClick={play}>
               Play
             </button>
-            <button disabled={busy || !canDraw} onClick={drawOrPrompt}>
+            <button disabled={busy || revealActive || !canDraw} onClick={drawOrPrompt}>
               Draw
             </button>
-            <button disabled={busy || !skip} onClick={() => skipDraw(skip)}>
+            <button disabled={busy || revealActive || !skip} onClick={() => skipDraw(skip)}>
               Skip
             </button>
             {canDiscard && (
-              <button disabled={busy} onClick={discard}>
+              <button disabled={busy || revealActive} onClick={discard}>
                 Discard
               </button>
             )}

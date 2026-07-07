@@ -320,6 +320,61 @@ button.pile:disabled {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
+.kahuna-discard {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 13.5rem;
+  max-height: 10rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.kahuna-discard-group {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.kahuna-discard-label {
+  color: var(--dim);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.kahuna-discard-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.kahuna-discard-chip {
+  min-width: 3.4rem;
+  height: 1.55rem;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 0.35rem;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: var(--panel);
+  font: 700 0.68rem "Alegreya Sans SC", system-ui, sans-serif;
+}
+
+.kahuna-discard-chip.own-hidden {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+}
+
+.kahuna-discard-chip.facedown {
+  color: #ffffff;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--cardback),
+    var(--cardback) 5px,
+    var(--cardback-stripe) 5px,
+    var(--cardback-stripe) 10px
+  );
+  border-color: var(--cardback-edge);
+}
+
 .kahuna-actions {
   margin-top: 0.7rem;
   align-items: center;
@@ -475,6 +530,11 @@ button.pile:disabled {
      their headers — long headers wrap instead. */
   .kahuna-supply > div + div {
     flex: 0 1 min-content;
+  }
+
+  .kahuna-discard {
+    max-width: min(100vw - 2rem, 18rem);
+    max-height: 6.5rem;
   }
 }
 

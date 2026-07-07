@@ -215,6 +215,17 @@ a,
   margin-top: 0.25rem;
 }
 
+.hud-link {
+  overflow-wrap: anywhere;
+}
+
+.hud-copy {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+}
+
 .menu {
   position: relative;
 }

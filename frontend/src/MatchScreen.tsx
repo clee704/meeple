@@ -16,6 +16,27 @@ function formatClock(seconds: number): string {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
 }
 
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Fall through to the old selection-based path for non-secure LAN origins.
+    }
+  }
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+  textArea.style.position = 'fixed'
+  textArea.style.left = '-9999px'
+  document.body.append(textArea)
+  textArea.focus()
+  textArea.select()
+  const copied = document.execCommand('copy')
+  textArea.remove()
+  return copied
+}
+
 // Kebab (⋮) dropdown anchored to the HUD's top-right corner, for actions
 // that shouldn't sit as bare buttons in the chrome (e.g. quitting).
 function Menu({
@@ -82,6 +103,7 @@ function Hud({
   onExit: () => void
   onQuit: () => void
 }) {
+  const [copied, setCopied] = useState(false)
   const matchClock = (
     <span className="hud-clock">
       Turn {env.turn_count} · {clock}
@@ -114,13 +136,21 @@ function Hud({
   }
   if (env.status === 'waiting') {
     const link = `${location.origin}${location.pathname}#/join/${session.joinCode}`
+    const copyLink = async () => {
+      if (!(await copyText(link))) return
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    }
     return (
       <header className="hud">
         <div>
           <span className="hud-turn">Waiting for an opponent…</span>
           <div className="dim hud-join">
             join code <strong>{session.joinCode}</strong> · same network:{' '}
-            <a href={link}>{link}</a>
+            <span className="hud-link">{link}</span>{' '}
+            <button className="hud-copy" onClick={() => void copyLink()}>
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
           </div>
         </div>
         <Menu items={[{ label: 'Quit match', danger: true, onClick: onQuit }]} />
@@ -176,6 +206,7 @@ export function MatchScreen({
     // Polls receive only the history entries newer than their since-version
     // (history_from > 0) — splice them onto the prefix already held.
     const prev = envRef.current
+    if (prev && e.version < prev.version) return
     const merged =
       e.history_from > 0 && prev
         ? { ...e, history: [...prev.history.slice(0, e.history_from), ...e.history] }
