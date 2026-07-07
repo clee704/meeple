@@ -6,11 +6,65 @@ import random
 import time
 
 import pytest
+import torch
 from fastapi.testclient import TestClient
 
 import meeple.games  # noqa: F401 — side effect: registers games + views
+from meeple.framework import registry
+from meeple.framework.game import Game, State
+from meeple.framework.spec import GameSpec
+from meeple.framework.view import GameView
 from meeple.web.app import FrontendBuildMissingError, create_app
 from meeple.web.matches import _EVICT_IDLE_SECONDS, MatchStore, UnknownMatchError
+
+
+class _ThreeSeatState(State):
+    def legal_actions(self) -> list[int]:
+        return [0]
+
+    def apply_action(self, action: int) -> State:
+        return self
+
+    def is_terminal(self) -> bool:
+        return False
+
+    def returns(self) -> list[float]:
+        return [0.0, 0.0, 0.0]
+
+    def current_player(self) -> int:
+        return 0
+
+    def chance_outcomes(self) -> list[tuple[int, float]]:
+        return []
+
+    def information_state_tensor(self, player: int) -> torch.Tensor:
+        return torch.zeros(0)
+
+    def information_state_key(self, player: int) -> str:
+        return f"p{player}"
+
+
+class _ThreeSeatGame(Game):
+    def new_initial_state(self) -> State:
+        return _ThreeSeatState()
+
+    def spec(self) -> GameSpec:
+        return GameSpec(
+            num_players=3,
+            perfect_information=True,
+            has_chance=False,
+            zero_sum=False,
+            num_distinct_actions=1,
+            action_names=("noop",),
+        )
+
+
+class _ThreeSeatView(GameView):
+    def observation(self, state: State, viewer: int) -> dict:
+        return {"viewer": viewer}
+
+    def action_metadata(self, action: int) -> dict:
+        return {"kind": "noop"}
 
 
 @pytest.fixture
@@ -124,6 +178,25 @@ def test_join_assigns_seat_1_then_match_is_full(client):
         == 409
     )
     assert client.post("/api/matches/join", json={"join_code": "XXXXX"}).status_code == 404
+
+
+def test_join_response_keeps_invite_code_while_three_player_match_waits(client):
+    game_id = "three-seat-web-stub"
+    registry.register(game_id, _ThreeSeatGame)
+    registry.register_view(game_id, _ThreeSeatView)
+    try:
+        created = _create(client, game_id=game_id)
+        joined = _join(client, created["join_code"])
+        assert joined["seat"] == 1
+        assert joined["match_id"] == created["match_id"]
+        assert joined["join_code"] == created["join_code"]
+
+        waiting = _state(client, created["match_id"], joined["token"])
+        assert waiting["status"] == "waiting"
+        assert waiting["observation"] == {}
+    finally:
+        registry._VIEW_REGISTRY.pop(game_id, None)
+        registry._REGISTRY.pop(game_id, None)
 
 
 def test_unknown_request_fields_are_rejected(client):

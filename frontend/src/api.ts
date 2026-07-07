@@ -46,15 +46,30 @@ export async function createMatch(gameId: string, seat = 0): Promise<Session> {
   // Refuse to enter the match in the wrong color — fail loudly instead.
   if (r.seat !== seat)
     throw new ApiError(0, `server seated you at seat ${r.seat}, not ${seat} — restart the server (it's running an older build) and try again`)
-  return { matchId: r.match_id, gameId: r.game_id, seat: r.seat, token: r.token, joinCode: r.join_code }
+  return {
+    matchId: r.match_id,
+    gameId: r.game_id,
+    seat: r.seat,
+    token: r.token,
+    joinCode: r.join_code,
+  }
 }
 
 export async function joinMatch(joinCode: string): Promise<Session> {
-  const r = await post<{ match_id: string; game_id: string; seat: number; token: string }>(
-    '/api/matches/join',
-    { join_code: joinCode },
-  )
-  return { matchId: r.match_id, gameId: r.game_id, seat: r.seat, token: r.token }
+  const r = await post<{
+    match_id: string
+    game_id: string
+    seat: number
+    token: string
+    join_code: string
+  }>('/api/matches/join', { join_code: joinCode })
+  return {
+    matchId: r.match_id,
+    gameId: r.game_id,
+    seat: r.seat,
+    token: r.token,
+    joinCode: r.join_code,
+  }
 }
 
 export function getState(session: Session, since?: number): Promise<Envelope | { changed: false; version: number }> {
@@ -101,11 +116,16 @@ function parseStoredSession(raw: string | null): Session | null {
   }
 }
 
-export function loadSession(): Session | null {
+export function loadSession({
+  includeSharedFallback = true,
+}: {
+  includeSharedFallback?: boolean
+} = {}): Session | null {
   const tabRaw = sessionStorage.getItem(SESSION_KEY)
   const tabSession = parseStoredSession(tabRaw)
   if (tabRaw !== null && !tabSession) sessionStorage.removeItem(SESSION_KEY)
   if (tabSession) return tabSession
+  if (!includeSharedFallback) return null
 
   const sharedRaw = localStorage.getItem(SESSION_KEY)
   const sharedSession = parseStoredSession(sharedRaw)

@@ -743,13 +743,9 @@ export function KahunaBoard({
               {obs.face_up.map((card, slot) => {
                 const la = byKind('take_faceup').find((x) => x.meta.slot === slot)
                 const ghost = oppDraw?.kind === 'faceup' && oppDraw.slot === slot ? oppDraw : null
-                // Hold the refill back while the taken card is still floating
-                // off this slot, so the new card only appears once that
-                // animation is done (rather than sitting under the ghost).
-                const shown = ghost ? null : card
                 return (
                   <span key={slot} className="slot">
-                    {shown === null ? (
+                    {card === null ? (
                       <span className="card empty" />
                     ) : (
                       <button
@@ -758,12 +754,12 @@ export function KahunaBoard({
                         disabled={revealActive || !la}
                         onClick={() => toggleDrawSel(slot)}
                       >
-                        {shown}
+                        {card}
                       </button>
                     )}
                     {ghost && (
-                      // The card the opponent just took floats up off its
-                      // (now empty) slot and fades.
+                      // Pointer-transparent, so the refilled public card can
+                      // still be selected while the old one floats away.
                       <span key={ghost.at} className="card ghost-taken">
                         {ghost.card}
                       </span>

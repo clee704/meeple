@@ -104,6 +104,7 @@ def create_app(
             raise HTTPException(status_code=409, detail=str(e)) from None
         return {
             "match_id": match.match_id,
+            "join_code": match.join_code,
             "game_id": match.game_id,
             "seat": seat,
             "token": token,

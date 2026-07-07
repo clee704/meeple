@@ -10,18 +10,17 @@ function joinCodeFromHash(): string | null {
 
 function loadInitialSession(): Session | null {
   const code = joinCodeFromHash()
-  const stored = loadSession()
-  if (!code) return stored
-  return stored?.joinCode?.toUpperCase() === code ? stored : null
+  if (!code) return loadSession()
+  const tabSession = loadSession({ includeSharedFallback: false })
+  return tabSession?.joinCode?.toUpperCase() === code ? tabSession : null
 }
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(loadInitialSession)
   const [toast, setToast] = useState<string | null>(null)
-  // True only when the session was entered on this page-load (a create/join
-  // action), not restored from storage: a fresh creator session is known to
-  // have started out waiting, even if the opponent joins before the first
-  // poll observes it (see MatchScreen and its join chime).
+  // True only when this page-load created the match. A fresh creator session
+  // is known to have started out waiting, even if the opponent joins before
+  // the first poll observes it (see MatchScreen and its join chime).
   const fresh = useRef(false)
 
   const showError = useCallback((msg: string) => {
@@ -29,9 +28,9 @@ export default function App() {
     window.setTimeout(() => setToast(null), 4000)
   }, [])
 
-  const enter = useCallback((s: Session) => {
+  const enter = useCallback((s: Session, created = false) => {
     saveSession(s)
-    fresh.current = true
+    fresh.current = created
     setSession(s)
   }, [])
 
@@ -40,8 +39,9 @@ export default function App() {
     setSession(null)
   }, [])
 
-  // Shareable LAN link: #/join/KJ4QZ joins that match (replacing any stored
-  // session — an explicit link click wins over a stale game).
+  // Shareable LAN link: #/join/KJ4QZ joins that match. An explicit join link
+  // wins over the shared fallback copy, but a tab already seated in that
+  // match keeps its own tab-scoped session.
   useEffect(() => {
     const handle = async () => {
       const code = joinCodeFromHash()
@@ -65,7 +65,7 @@ export default function App() {
         <MatchScreen
           key={session.matchId}
           session={session}
-          freshlyCreated={fresh.current && session.joinCode !== undefined}
+          freshlyCreated={fresh.current}
           onExit={exit}
           onError={showError}
         />

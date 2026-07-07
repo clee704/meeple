@@ -3,7 +3,13 @@ import { createMatch, joinMatch, listGames } from './api'
 import { playSound } from './sound'
 import type { GameInfo, Session } from './types'
 
-export function Lobby({ onEnter, onError }: { onEnter: (s: Session) => void; onError: (msg: string) => void }) {
+export function Lobby({
+  onEnter,
+  onError,
+}: {
+  onEnter: (s: Session, created?: boolean) => void
+  onError: (msg: string) => void
+}) {
   const [games, setGames] = useState<GameInfo[]>([])
   const [code, setCode] = useState('')
 
@@ -15,7 +21,7 @@ export function Lobby({ onEnter, onError }: { onEnter: (s: Session) => void; onE
     try {
       const session = await createMatch(gameId, seat)
       playSound('created')
-      onEnter(session)
+      onEnter(session, true)
     } catch (e) {
       onError(String(e))
     }
