@@ -33,6 +33,7 @@ roadmap.
 
 ```bash
 uv sync                  # install deps into .venv
+npm --prefix frontend ci # install frontend deps
 uv run pytest            # run tests (with coverage gate)
 uv run pre-commit run -a # lint + hygiene checks
 ```

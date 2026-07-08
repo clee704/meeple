@@ -54,7 +54,7 @@ addopts = "--cov=meeple --cov-report=term-missing --cov-fail-under=90"
 
 [tool.coverage.run]
 branch = true
-omit = ["*/tests/*"]
+omit = ["*/tests/*", "*/test_*.py"]
 
 [tool.vulture]
 paths = ["meeple"]

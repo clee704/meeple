@@ -8,6 +8,10 @@ function joinCodeFromHash(): string | null {
   return location.hash.match(/^#\/join\/([A-Za-z0-9]+)$/)?.[1].toUpperCase() ?? null
 }
 
+function clearJoinHash(): void {
+  history.replaceState(null, '', location.pathname + location.search)
+}
+
 function loadInitialSession(): Session | null {
   const code = joinCodeFromHash()
   if (!code) return loadSession()
@@ -46,10 +50,17 @@ export default function App() {
     const handle = async () => {
       const code = joinCodeFromHash()
       if (!code) return
-      history.replaceState(null, '', location.pathname + location.search)
-      if (session?.joinCode?.toUpperCase() === code) return
+      const tabSession = loadSession({ includeSharedFallback: false })
+      const hasMatchingTabSession =
+        tabSession?.joinCode?.toUpperCase() === code && tabSession.matchId === session?.matchId
+      if (hasMatchingTabSession) {
+        clearJoinHash()
+        return
+      }
       try {
-        enter(await joinMatch(code))
+        const joined = await joinMatch(code)
+        clearJoinHash()
+        enter(joined)
       } catch (e) {
         showError(String(e))
       }
@@ -57,7 +68,7 @@ export default function App() {
     handle()
     window.addEventListener('hashchange', handle)
     return () => window.removeEventListener('hashchange', handle)
-  }, [enter, session?.joinCode, showError])
+  }, [enter, session?.matchId, showError])
 
   return (
     <main>
