@@ -202,6 +202,9 @@ checkpoint as if the session might not get a next turn:
   say so and propose an alternative instead of silently overriding or
   silently complying;
 - adding a game would require changing the `Game`/`State` interface;
+- a UI/renderer or game-presentation change would materially alter tabletop
+  play, rule interpretation, hidden/public information display, or how physical
+  components are represented (draw/discard piles, turn flow, scoring displays);
 - a security / deploy / networking step (exposing the server, DNS, tunnels,
   secrets, Cloudflare config);
 - anything irreversible (deleting files/data, `git push --force`);
