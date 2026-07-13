@@ -61,11 +61,12 @@ const DRAW_NOTICE_KEY = 'meeple.kahuna.draw-notice'
 const BRIDGE_SUPPLY = 25
 const SEAT_COLOR = ['var(--p0)', 'var(--p1)']
 const SEAT_LABEL = ['var(--p0-ink)', 'var(--p1-ink)']
-// Island labels hold this on-screen size however far the board is scaled
-// down — counter-scaled by the SVG's live screen matrix — so they stay
-// readable on a narrow phone instead of shrinking with the board. Roughly
-// matches the hand cards' text at phone width.
-const ISLAND_LABEL_PX = 14
+// Island labels hold these on-screen sizes however far the board is scaled
+// down — counter-scaled by the SVG's live screen matrix. They match the
+// responsive card lettering: larger on desktop, compact on a narrow phone.
+const ISLAND_LABEL_DESKTOP_PX = 16
+const ISLAND_LABEL_MOBILE_PX = 14
+const MOBILE_QUERY = '(max-width: 700px)'
 
 // A pile of `count` cards (card 0 bottommost), top card anchored at the
 // top-left so a shrinking pile pulls in toward it; depth fans lower cards
@@ -545,21 +546,27 @@ export function KahunaBoard({
   }, [obs.hand])
 
   // Island-label size in SVG user units, recomputed from the live screen
-  // matrix so the rendered pixel size stays ISLAND_LABEL_PX at any board
-  // width. ResizeObserver fires once on mount and on every resize.
+  // matrix so the rendered pixel size stays at the responsive target at any
+  // board width. ResizeObserver fires once on mount and on every resize.
   const svgRef = useRef<SVGSVGElement>(null)
   const [labelSize, setLabelSize] = useState(11)
   useLayoutEffect(() => {
     const svg = svgRef.current
     if (!svg) return
+    const mobile = window.matchMedia(MOBILE_QUERY)
     const measure = () => {
       const ctm = svg.getScreenCTM()
-      if (ctm && ctm.a > 0) setLabelSize(ISLAND_LABEL_PX / ctm.a)
+      const target = mobile.matches ? ISLAND_LABEL_MOBILE_PX : ISLAND_LABEL_DESKTOP_PX
+      if (ctm && ctm.a > 0) setLabelSize(target / ctm.a)
     }
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(svg)
-    return () => ro.disconnect()
+    mobile.addEventListener('change', measure)
+    return () => {
+      ro.disconnect()
+      mobile.removeEventListener('change', measure)
+    }
   }, [])
 
   // Contribute score / round to the shell's HUD (item 1); on phones the shell
