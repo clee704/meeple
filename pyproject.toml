@@ -41,6 +41,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["meeple"]
 
+[tool.hatch.build.targets.wheel.hooks.custom]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

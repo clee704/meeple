@@ -29,7 +29,9 @@ from meeple.web.matches import (
 )
 from meeple.web.schemas import ActionRequest, CreateMatchRequest, JoinMatchRequest
 
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+PACKAGED_FRONTEND_DIST = Path(__file__).with_name("static")
+SOURCE_FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+FRONTEND_DIST = PACKAGED_FRONTEND_DIST if PACKAGED_FRONTEND_DIST.is_dir() else SOURCE_FRONTEND_DIST
 
 
 class FrontendBuildMissingError(RuntimeError):
@@ -38,9 +40,10 @@ class FrontendBuildMissingError(RuntimeError):
 
 def frontend_build_missing_message(path: Path = FRONTEND_DIST) -> str:
     return (
-        f"Frontend build not found at {path}. "
-        "Build it with `cd frontend && npm install && npm run build`, "
-        "then run `meeple` again. For frontend development, start that built "
+        f"Frontend assets not found at {path}. If MeepleMind is installed, "
+        "reinstall the package. From a source checkout, build the assets with "
+        "`cd frontend && npm install && npm run build`, then run `meeple` again. "
+        "For frontend development, start that built "
         "backend on port 8000, then run `cd frontend && npm run dev`."
     )
 

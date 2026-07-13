@@ -59,3 +59,10 @@ jobs:
       - name: frontend test
         run: npm test
         working-directory: frontend
+
+      - name: installed wheel startup smoke test
+        run: |
+          uv build --wheel --out-dir dist
+          cd /tmp
+          uv run --isolated --with "$GITHUB_WORKSPACE/dist/meeple-0.1.0-py3-none-any.whl" python -c \
+            "from meeple.web.app import FRONTEND_DIST; from meeple.serve import make_app; assert FRONTEND_DIST.is_dir(); make_app()"
