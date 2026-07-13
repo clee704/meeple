@@ -91,16 +91,21 @@ class Match:
         raise BadTokenError("bad seat token")
 
     def leave(self, seat: int) -> None:
-        """`seat` leaves the match. If no opponent ever joined there is no one
-        to award a win to, so the match is simply canceled; otherwise `seat`
-        forfeits and the remaining seat(s) win."""
+        """Remove `seat` from a lobby or forfeit an in-progress match."""
         if self.status == "waiting":
-            self.canceled = True
+            occupied_opponents = any(
+                token is not None for other, token in enumerate(self.tokens) if other != seat
+            )
+            if occupied_opponents:
+                self.tokens[seat] = None
+            else:
+                self.canceled = True
         elif self.status == "in_progress":
             self.forfeited_by = seat
         else:
             raise IllegalActionError(f"match is {self.status}, cannot be left")
-        self.finished_at = time.monotonic()
+        if self.status == "finished":
+            self.finished_at = time.monotonic()
         self.touched_at = time.monotonic()
         self.version += 1
 
@@ -139,7 +144,7 @@ class Match:
         # ride along (bisect works because entry_versions is ascending).
         history_from = 0 if since is None else bisect_right(self.entry_versions, since)
         status = self.status
-        waiting = status == "waiting"
+        never_started = self.started_at is None
         in_progress = status == "in_progress"
         your_turn = in_progress and self.state.current_player() == seat
         env = {
@@ -149,9 +154,9 @@ class Match:
             "status": status,
             "to_move": self.state.current_player() if in_progress else None,
             "your_turn": your_turn,
-            # While a lobby is waiting for all seats to fill, the creator
-            # must not see any deal-dependent private or public setup state.
-            "observation": {} if waiting else self.view.observation(self.state, seat),
+            # A match that never started must not reveal deal-dependent setup,
+            # including in the response that confirms lobby cancellation.
+            "observation": {} if never_started else self.view.observation(self.state, seat),
             "legal_actions": [
                 {"action": a, "name": spec.action_names[a], "meta": self.view.action_metadata(a)}
                 for a in (self.state.legal_actions() if your_turn else [])

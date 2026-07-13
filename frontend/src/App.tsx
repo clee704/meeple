@@ -26,6 +26,7 @@ export default function App() {
   // is known to have started out waiting, even if the opponent joins before
   // the first poll observes it (see MatchScreen and its join chime).
   const fresh = useRef(false)
+  const hashJoins = useRef(new Map<string, ReturnType<typeof joinMatch>>())
 
   const showError = useCallback((msg: string) => {
     setToast(msg)
@@ -57,12 +58,21 @@ export default function App() {
         clearJoinHash()
         return
       }
+      let request = hashJoins.current.get(code)
+      if (!request) {
+        request = joinMatch(code)
+        hashJoins.current.set(code, request)
+      }
       try {
-        const joined = await joinMatch(code)
+        const joined = await request
+        // A newer hash wins if navigation changed while this request ran.
+        if (joinCodeFromHash() !== code) return
         clearJoinHash()
         enter(joined)
       } catch (e) {
-        showError(String(e))
+        if (joinCodeFromHash() === code) showError(String(e))
+      } finally {
+        if (hashJoins.current.get(code) === request) hashJoins.current.delete(code)
       }
     }
     handle()

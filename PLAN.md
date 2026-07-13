@@ -170,7 +170,7 @@ Status right now: **Phases 0-3 done** (tooling; framework seam, native Kuhn,
 `OpenSpielAdapter`, `random_agent`; Kahuna engine merged in #15; web UI —
 `GameView` SPI, FastAPI backend, React frontend with Kahuna/Kuhn renderers,
 human-vs-human over LAN, see #4. The terminal-UI plan was dropped in favor of
-going straight to the web UI; there is no CLI). **Phase 4 (AI: heuristic +
+going straight to the web UI; there is no terminal UI). **Phase 4 (AI: heuristic +
 MCTS + ISMCTS) is next** — see [#5](https://github.com/clee704/meeple/issues/5).
 
 ---

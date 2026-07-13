@@ -291,12 +291,36 @@ def test_leave_while_waiting_closes_the_match_to_new_joiners(client):
     assert resp.status_code == 200
     env = resp.json()
     assert env["status"] == "finished"
+    assert env["observation"] == {}
     # No opponent ever joined, so there's no one to name a winner over —
     # unlike an in-progress forfeit, this must carry no fabricated result.
     assert env["forfeited_by"] is None
     assert env["result"] is None
     resp = client.post("/api/matches/join", json={"join_code": created["join_code"]})
     assert resp.status_code == 404
+
+
+def test_leave_partially_filled_lobby_frees_only_that_seat(client):
+    game_id = "three-seat-web-stub"
+    registry.register(game_id, _ThreeSeatGame)
+    registry.register_view(game_id, _ThreeSeatView)
+    try:
+        created = _create(client, game_id=game_id)
+        joined = _join(client, created["join_code"])
+
+        left = _leave(client, created["match_id"], joined["token"])
+        assert left.status_code == 200
+        assert left.json()["status"] == "waiting"
+        assert left.json()["observation"] == {}
+
+        replacement = _join(client, created["join_code"])
+        final_join = _join(client, created["join_code"])
+        assert replacement["seat"] == joined["seat"]
+        assert final_join["seat"] == 2
+        assert _state(client, created["match_id"], created["token"])["status"] == "in_progress"
+    finally:
+        registry._VIEW_REGISTRY.pop(game_id, None)
+        registry._REGISTRY.pop(game_id, None)
 
 
 def test_leave_rejects_bad_token(client):

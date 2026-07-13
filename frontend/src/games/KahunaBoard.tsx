@@ -217,12 +217,9 @@ export function KahunaBoard({
     else if (canAdd(pos)) setSel({ mode: 'play', cards: selCards, bridges: [...selBridges, pos] })
   }
 
-  // Removes go first: a place's majority cascade can strip an opponent
-  // bridge that's also selected for removal, but a remove never invalidates
-  // another selected play.
-  const orderedSel = [...selBridges].sort(
-    (a, b) => Number(obs.bridges[a] === null) - Number(obs.bridges[b] === null),
-  )
+  // Each action can change control and cascade bridge removals, so preserve
+  // the order in which the player selected the lines.
+  const orderedSel = selBridges
   const plan =
     selBridges.length > 0 && selectedPlacementCount <= remainingBridgeSupply
       ? matchSelection(
@@ -787,42 +784,8 @@ export function KahunaBoard({
           </div>
           <div>
             <h3>Discard ({discardCount})</h3>
-            <div className="kahuna-discard">
-              {discardCount === 0 && <span className="dim">empty</span>}
-              {obs.discard.length > 0 && (
-                <div className="kahuna-discard-group">
-                  <span className="kahuna-discard-label">Public</span>
-                  <div className="kahuna-discard-chips">
-                    {obs.discard.map((card, i) => (
-                      <span key={`public-${i}`} className="kahuna-discard-chip">
-                        {card}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {obs.my_hidden_discards.length > 0 && (
-                <div className="kahuna-discard-group">
-                  <span className="kahuna-discard-label">Your hidden</span>
-                  <div className="kahuna-discard-chips">
-                    {obs.my_hidden_discards.map((card, i) => (
-                      <span key={`mine-${i}`} className="kahuna-discard-chip own-hidden">
-                        {card}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {obs.opponent_hidden_discard_count > 0 && (
-                <div className="kahuna-discard-group">
-                  <span className="kahuna-discard-label">Opponent hidden</span>
-                  <div className="kahuna-discard-chips">
-                    <span className="kahuna-discard-chip facedown">
-                      ? x{obs.opponent_hidden_discard_count}
-                    </span>
-                  </div>
-                </div>
-              )}
+            <div className="pile" role="img" aria-label={`discard pile, ${discardCount} cards`}>
+              {cardStack(discardCount, () => 'card facedown')}
             </div>
           </div>
         </div>
@@ -870,9 +833,40 @@ export function KahunaBoard({
         )}
       </div>
 
+      <div className="kahuna-log-bar">
+        <h3>Log</h3>
+        <button
+          className="kahuna-log-line"
+          disabled={history.length === 0}
+          onClick={() => setLogOpen(true)}
+        >
+          {history.length > 0 ? historyLine(history[history.length - 1], seat) : 'No moves yet'}
+        </button>
+      </div>
+
+      {logOpen && (
+        <Overlay
+          onClose={() => setLogOpen(false)}
+          contentClassName="modal kahuna-log-modal"
+          contentProps={{ role: 'dialog', 'aria-modal': true, 'aria-label': 'Move log' }}
+        >
+          <h3>Log</h3>
+          <ul className="kahuna-log-list">
+            {[...recentTurns(history)].reverse().map((h, i) => (
+              <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
+            ))}
+          </ul>
+          <div className="action-row modal-actions">
+            <button className="primary" onClick={() => setLogOpen(false)}>
+              Close
+            </button>
+          </div>
+        </Overlay>
+      )}
+
       {/* Persistent end-of-game score sheet: the transient round overlays
           vanish after a few seconds, so once the game is over the totals
-          and the per-round breakdown stay reviewable here. */}
+          and the per-round breakdown stay reviewable below the log. */}
       {gameOver && (
         <div>
           <h3>Final score</h3>
@@ -903,37 +897,6 @@ export function KahunaBoard({
             <p className="dim">Won early by knockout: the loser had no bridges on the board.</p>
           )}
         </div>
-      )}
-
-      <div className="kahuna-log-bar">
-        <h3>Log</h3>
-        <button
-          className="kahuna-log-line"
-          disabled={history.length === 0}
-          onClick={() => setLogOpen(true)}
-        >
-          {history.length > 0 ? historyLine(history[history.length - 1], seat) : 'No moves yet'}
-        </button>
-      </div>
-
-      {logOpen && (
-        <Overlay
-          onClose={() => setLogOpen(false)}
-          contentClassName="modal kahuna-log-modal"
-          contentProps={{ role: 'dialog', 'aria-modal': true, 'aria-label': 'Move log' }}
-        >
-          <h3>Log</h3>
-          <ul className="kahuna-log-list">
-            {[...recentTurns(history)].reverse().map((h, i) => (
-              <li key={history.length - 1 - i}>{historyLine(h, seat)}</li>
-            ))}
-          </ul>
-          <div className="action-row modal-actions">
-            <button className="primary" onClick={() => setLogOpen(false)}>
-              Close
-            </button>
-          </div>
-        </Overlay>
       )}
       {confirmDialog}
     </div>

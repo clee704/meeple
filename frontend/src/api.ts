@@ -130,6 +130,7 @@ export function loadSession({
   const sharedRaw = localStorage.getItem(SESSION_KEY)
   const sharedSession = parseStoredSession(sharedRaw)
   if (sharedRaw !== null && !sharedSession) localStorage.removeItem(SESSION_KEY)
+  if (sharedSession && sharedRaw) sessionStorage.setItem(SESSION_KEY, sharedRaw)
   return sharedSession
 }
 

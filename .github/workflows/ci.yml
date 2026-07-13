@@ -17,7 +17,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --locked
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
