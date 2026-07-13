@@ -50,3 +50,10 @@ repos:
         language: system
         files: ^frontend/
         pass_filenames: false
+
+      - id: frontend-test
+        name: frontend test
+        entry: bash -c 'cd frontend && npm test'
+        language: system
+        files: ^frontend/
+        pass_filenames: false

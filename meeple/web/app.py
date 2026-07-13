@@ -40,8 +40,8 @@ def frontend_build_missing_message(path: Path = FRONTEND_DIST) -> str:
     return (
         f"Frontend build not found at {path}. "
         "Build it with `cd frontend && npm install && npm run build`, "
-        "then run `meeple` again. For frontend development, run "
-        "`cd frontend && npm run dev` with the FastAPI server on port 8000."
+        "then run `meeple` again. For frontend development, start that built "
+        "backend on port 8000, then run `cd frontend && npm run dev`."
     )
 
 

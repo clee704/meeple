@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError, getState, leaveMatch, postAction } from './api'
 import { useConfirm } from './Confirm'
+import { mergeEnvelope } from './envelope'
 import { renderers } from './games/registry'
 import { playSound } from './sound'
 import { useEscapeToClose } from './useEscapeToClose'
@@ -203,14 +204,9 @@ export function MatchScreen({
   const absorbedAtRef = useRef(Date.now())
 
   const absorb = useCallback((e: Envelope) => {
-    // Polls receive only the history entries newer than their since-version
-    // (history_from > 0) — splice them onto the prefix already held.
     const prev = envRef.current
-    if (prev && e.version < prev.version) return
-    const merged =
-      e.history_from > 0 && prev
-        ? { ...e, history: [...prev.history.slice(0, e.history_from), ...e.history] }
-        : e
+    const merged = mergeEnvelope(prev, e)
+    if (merged === prev) return
     envRef.current = merged
     absorbedAtRef.current = Date.now()
     setEnv(merged)

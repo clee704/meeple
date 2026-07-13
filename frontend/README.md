@@ -14,9 +14,11 @@ npm ci
 Run the backend on port 8000 from the repo root:
 
 ```sh
+npm --prefix frontend run build
 uv run meeple
 ```
 
+The initial build lets the backend start; Vite serves live frontend changes.
 Then run Vite from this directory:
 
 ```sh
@@ -31,6 +33,7 @@ same API paths in development and production.
 ```sh
 npm run build
 npm run lint
+npm test
 ```
 
 These checks also run in CI. They are mirrored in pre-commit for local commits,
