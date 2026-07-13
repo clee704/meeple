@@ -112,6 +112,11 @@ class KahunaState(State):
     final_turns_remaining: int | None
     premature_winner: int | None
     final_round_winner: int | None = None
+    # Public scoring log for UIs: one (p0, p1) points-awarded pair per
+    # completed scoring (rounds 1, 2, then the final round). Derivable from
+    # the public history, so deliberately absent from the information-state
+    # key and tensor.
+    round_points: tuple[tuple[float, float], ...] = ()
     # Per-player cards discarded face-down for the hand limit (see RULES.md's
     # Turn structure): these get reshuffled into the pile just like `discard`,
     # but each player sees only their own by identity — the opponent's only
@@ -374,7 +379,11 @@ class KahunaState(State):
             played_card_this_turn=True,
         )
         for island in (a, b):
-            state = state._resolve_new_control(island, player)
+            # Rule 2 (RULES.md) fires only on a *new* majority: if `player`
+            # already controlled `island` before this placement, a redundant
+            # extra bridge there must not re-strip the opponent's bridges.
+            if self._controller(island) != player:
+                state = state._resolve_new_control(island, player)
         return state._check_premature_end()
 
     def _apply_remove(self, pos: int, cards: str) -> "KahunaState":
@@ -492,11 +501,12 @@ class KahunaState(State):
 
         p0, p1 = self._controlled_islands(0), self._controlled_islands(1)
         points = 1.0 if scoring_count == 1 else 2.0
-        scores = list(self.scores)
+        awarded = [0.0, 0.0]
         if p0 > p1:
-            scores[0] += points
+            awarded[0] = points
         elif p1 > p0:
-            scores[1] += points
+            awarded[1] = points
+        scores = (self.scores[0] + awarded[0], self.scores[1] + awarded[1])
 
         # Both the openly-discarded and face-down-discarded cards go back
         # into the pile — the face-down/hidden distinction only matters for
@@ -505,8 +515,9 @@ class KahunaState(State):
         num_to_deal = min(NUM_FACEUP_SLOTS, len(new_pile))
         state = replace(
             self,
-            scores=tuple(scores),
+            scores=scores,
             scoring_count=scoring_count,
+            round_points=self.round_points + ((awarded[0], awarded[1]),),
             pile=new_pile,
             discard=(),
             hidden_discards=((), ()),
@@ -525,15 +536,20 @@ class KahunaState(State):
 
     def _final_scoring(self) -> "KahunaState":
         p0, p1 = self._controlled_islands(0), self._controlled_islands(1)
-        scores = list(self.scores)
+        awarded = [0.0, 0.0]
         final_round_winner = None
         if p0 > p1:
-            scores[0] += p0 - p1
+            awarded[0] = float(p0 - p1)
             final_round_winner = 0
         elif p1 > p0:
-            scores[1] += p1 - p0
+            awarded[1] = float(p1 - p0)
             final_round_winner = 1
-        return replace(self, scores=tuple(scores), final_round_winner=final_round_winner)
+        return replace(
+            self,
+            scores=(self.scores[0] + awarded[0], self.scores[1] + awarded[1]),
+            final_round_winner=final_round_winner,
+            round_points=self.round_points + ((awarded[0], awarded[1]),),
+        )
 
     def _apply_chance(self, action: Action) -> "KahunaState":
         island = ISLANDS[action]

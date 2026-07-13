@@ -1,0 +1,372 @@
+:root {
+  --bg: #f5f2ea;
+  --panel: #ffffff;
+  --ink: #2b2620;
+  --dim: #8a8378;
+  --line: #ddd7cb;
+  --accent: #f4d446;
+  --accent-ink: var(--ink);
+  --p0: #24211e; /* seat 0 — black */
+  --p0-ink: #ffffff; /* label on a seat-0-colored surface */
+  --p1: #ffffff; /* seat 1 — white */
+  --p1-ink: var(--ink); /* label on a seat-1-colored surface */
+  --danger: #9c2f2f;
+  --danger-ink: #ffffff;
+  font: 16px/1.5 'Inter', system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  cursor: default;
+  user-select: none;
+}
+
+* {
+  box-sizing: border-box;
+  /* No grey flash on tap (iOS Safari); taps fire immediately, no
+     double-tap-zoom delay. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+h1 {
+  font-size: 1.6rem;
+  margin: 0.5rem 0 1rem;
+}
+
+h2 {
+  font-size: 1.05rem;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--dim);
+}
+
+button {
+  font: inherit;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* Hover affordances only where hover exists — on touch they'd stick to
+   whatever was tapped last. */
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+input {
+  font: inherit;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  text-transform: uppercase;
+}
+
+input,
+textarea,
+a,
+.hud-join,
+.hud-join * {
+  cursor: auto;
+  user-select: text;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+.game-list,
+.action-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* One line per game: its name, then a create button per named seat. */
+.game-list {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.game-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.seat-swatch {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  margin-right: 0.4em;
+  vertical-align: -0.05em;
+}
+
+.lobby form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Match HUD: slim status bar — turn pill on the left, clock and the
+   kebab menu pinned top-right. Sticky, so whose turn it is stays
+   visible however far the page is scrolled. */
+.hud {
+  position: sticky;
+  top: 0;
+  z-index: 8; /* over the board and its reveal overlay, under menu/modal */
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  margin-bottom: 0.6rem;
+  min-height: 2.4rem;
+  font-size: 0.9rem;
+}
+
+.hud-turn {
+  display: inline-block;
+  padding: 0.25rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-weight: 600;
+  /* background / text / border colors are set inline per whose turn it is
+     (the active player's seat color). */
+}
+
+.hud-verdict {
+  font-size: 1.15rem;
+}
+
+.hud-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.hud-clock {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Game-supplied HUD status (e.g. Kahuna score / round): inline in the bar on
+   wide screens, moved into the kebab menu on phones so the bar never wraps. */
+.hud-extras {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.menu-extras {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .hud-extras {
+    display: none;
+  }
+
+  .menu-extras {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.5rem;
+    padding: 0.35rem 0.7rem 0.55rem;
+    margin-bottom: 0.2rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.9rem;
+  }
+}
+
+.hud-join {
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.hud-link {
+  overflow-wrap: anywhere;
+}
+
+.hud-copy {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-btn {
+  border: none;
+  background: none;
+  padding: 0.15rem 0.55rem;
+  font-size: 1.4rem;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.3rem);
+  z-index: 20;
+  min-width: 10rem;
+  display: grid;
+  padding: 0.3rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.menu-pop button {
+  border: none;
+  background: none;
+  text-align: left;
+  white-space: nowrap;
+  padding: 0.5rem 0.7rem;
+  border-radius: 7px;
+}
+
+.menu-pop button.danger {
+  color: var(--danger);
+}
+
+@media (hover: hover) {
+  .menu-btn:hover {
+    color: var(--ink);
+  }
+
+  .menu-pop button:hover {
+    background: var(--bg);
+  }
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.modal {
+  background: var(--panel);
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem 1rem;
+  max-width: 22rem;
+  width: 100%;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  animation: modal-in 0.15s ease-out;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+.modal p {
+  margin: 0 0 1rem;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+}
+
+.modal button.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--danger-ink);
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--danger);
+  color: var(--danger-ink);
+  padding: 0.6rem 1.1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* Phones (portrait): tighter chrome. */
+@media (max-width: 700px) {
+  main {
+    padding: 0.5rem 0.5rem 1.5rem;
+  }
+
+  button {
+    padding: 0.4rem 0.7rem;
+  }
+}
+
+/* Kuhn */
+.kuhn-board {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+
+.kuhn-card {
+  width: 4.5rem;
+  height: 6.2rem;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--panel);
+  display: grid;
+  place-items: center;
+  font-size: 2.4rem;
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .action-row {
+    gap: 0.3rem;
+  }
+}

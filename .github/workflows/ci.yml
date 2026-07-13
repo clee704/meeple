@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 jobs:
@@ -17,7 +17,18 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --locked
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
 
       - name: ruff check
         run: uv run ruff check .
@@ -36,3 +47,22 @@ jobs:
 
       - name: pytest (+ coverage gate)
         run: uv run pytest
+
+      - name: frontend build
+        run: npm run build
+        working-directory: frontend
+
+      - name: frontend lint
+        run: npm run lint
+        working-directory: frontend
+
+      - name: frontend test
+        run: npm test
+        working-directory: frontend
+
+      - name: installed wheel startup smoke test
+        run: |
+          uv build --wheel --out-dir dist
+          cd /tmp
+          uv run --isolated --with "$GITHUB_WORKSPACE/dist/meeple-0.1.0-py3-none-any.whl" python -c \
+            "from meeple.web.app import FRONTEND_DIST; from meeple.serve import make_app; assert FRONTEND_DIST.is_dir(); make_app()"
