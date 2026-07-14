@@ -169,7 +169,7 @@ repeat via the onboarding recipe in `AGENTS.md`.
 | 8 | Deep CFR | platform | `ai/cfr/deep_cfr.py`, advantage/strategy nets, external-sampling MCCFR | [#9](https://github.com/clee704/meeple/issues/9) |
 | 9 | Deployment hardening | platform | wait queue, per-IP rate limit, Turnstile, persistent store, Cloudflare Tunnel + systemd (G7 gate before any public exposure) | [#10](https://github.com/clee704/meeple/issues/10) |
 | 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes; `ai/mcts.py` (UCT, deferred from Phase 4) lands first as its own platform commit | [#11](https://github.com/clee704/meeple/issues/11) |
-| 11 | Polish / deploy | platform | checkpoints, difficulty levels, `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
+| 11 | Polish / deploy | platform | checkpoints, difficulty levels (simulation budget + human-like imperfect-memory models — design sketched in #12), `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
 
 Status right now: **Phases 0-3 done** (tooling; framework seam, native Kuhn,
 `OpenSpielAdapter`, `random_agent`; Kahuna engine merged in #15; web UI —
