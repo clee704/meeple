@@ -139,16 +139,17 @@ perfect vs imperfect info, chance vs no chance. If a new game needs a change
 here, that's a deliberate interface revision (propose it, don't route around
 it — AGENTS.md G8), not a quick patch.
 
-**Information-state contract (all-or-nothing, never in between):** a `State`
-must support both forward simulation and **perfect-recall** information
-states — `information_state_key` encodes the player's full observation
-history (in practice: derive it from an append-only public action log in the
-state, so recall holds by construction, not by hand-picking fields).
-`information_state_tensor` is the single place a lossy fixed-size summary is
-allowed, and each game's RULES.md documents that encoding. Agent-side belief
-models (e.g. the human-like memory design in
-[#12](https://github.com/clee704/meeple/issues/12)) degrade *from* what the
-state encodes; they never substitute for encoding it.
+**Information-state contract:** `information_state_key(player)` returns the
+player's full observation history — information states are **perfect
+recall**. Engines derive the key from an append-only action log carried by
+the state (chance outcomes masked per viewer), so recall holds by
+construction; the log is the state's canonical representation, and zone
+fields (hands, piles, board) are caches kept for O(1) simulation.
+`information_state_tensor` is the only place a lossy fixed-size encoding is
+permitted, and each game's RULES.md documents exactly what that encoding
+drops. Agent-side belief models (e.g. difficulty via imperfect memory,
+[#12](https://github.com/clee704/meeple/issues/12)) consume what the state
+encodes; they never substitute for encoding it.
 
 A game opts into the web UI by also registering a **`GameView`**
 (`meeple/framework/view.py`) next to its `Game`: per-player JSON
@@ -173,13 +174,13 @@ repeat via the onboarding recipe in `AGENTS.md`.
 | 1 | Framework seam | platform | `Game`/`State`/`GameSpec`/registry, native Kuhn poker, `OpenSpielAdapter` (oracle), `random_agent` | [#2](https://github.com/clee704/meeple/issues/2) (closed) |
 | 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | [#3](https://github.com/clee704/meeple/issues/3) (closed) |
 | 3 | Web UI (local) | shell + per-game renderer | `GameView` SPI, game-agnostic FastAPI match backend + React SPA shell, per-game renderers (Kahuna, Kuhn); human-vs-human over LAN | [#4](https://github.com/clee704/meeple/issues/4) |
-| 4 | AI: heuristic + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py` + per-game evaluation hook, determinization SPI, `ai/ismcts.py`, minimal `eval/tournament.py`, AI seat in web matches. `ai/mcts.py` (plain UCT) deferred to Phase 10 — no perfect-info game to validate it on until then | [#5](https://github.com/clee704/meeple/issues/5) |
+| 4 | AI: heuristic + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py` + per-game evaluation hook, determinization SPI (`resample_from_infostate`), `ai/ismcts.py`, minimal `eval/tournament.py`, AI seat in web matches | [#5](https://github.com/clee704/meeple/issues/5) |
 | 5 | Eval harness | platform | extends Phase 4's minimal `eval/tournament.py`; `eval/exploitability.py` validated vs OpenSpiel on Kuhn | [#6](https://github.com/clee704/meeple/issues/6) |
 | 6 | Tabular CFR | platform | `ai/cfr/tabular.py`, validated on native Kuhn | [#7](https://github.com/clee704/meeple/issues/7) |
 | 7 | Coach / explain mode | platform | rank legal moves by win-prob, narrate control changes, `--hint` | [#8](https://github.com/clee704/meeple/issues/8) |
 | 8 | Deep CFR | platform | `ai/cfr/deep_cfr.py`, advantage/strategy nets, external-sampling MCCFR | [#9](https://github.com/clee704/meeple/issues/9) |
 | 9 | Deployment hardening | platform | wait queue, per-IP rate limit, Turnstile, persistent store, Cloudflare Tunnel + systemd (G7 gate before any public exposure) | [#10](https://github.com/clee704/meeple/issues/10) |
-| 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes; `ai/mcts.py` (UCT, deferred from Phase 4) lands first as its own platform commit | [#11](https://github.com/clee704/meeple/issues/11) |
+| 10 | Second game (reuse proof) | per-game | preceded by `ai/mcts.py` (plain UCT — needs this phase's perfect-info game to validate) as its own platform commit; then Quarto or Patchwork via the recipe, zero core changes | [#11](https://github.com/clee704/meeple/issues/11) |
 | 11 | Polish / deploy | platform | checkpoints, difficulty levels (simulation budget + human-like imperfect-memory models — design sketched in #12), `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
 
 Status right now: **Phases 0-3 done** (tooling; framework seam, native Kuhn,
