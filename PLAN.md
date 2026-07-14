@@ -100,6 +100,7 @@ breadth. OpenSpiel stays the oracle you cross-check CFR against on Kuhn/Leduc.
 ```python
 # meeple/framework/game.py
 from abc import ABC, abstractmethod
+import random
 import torch
 Action = int
 CHANCE = -1
@@ -121,6 +122,10 @@ class State(ABC):
     def information_state_tensor(self, player: int) -> torch.Tensor: ...  # Deep CFR input
     @abstractmethod
     def information_state_key(self, player: int) -> str: ...    # tabular CFR info-set key
+    # ISMCTS determinization: a full state sampled from the worlds consistent
+    # with `player`'s info set. Perfect-info games `return self` (immutable).
+    @abstractmethod
+    def resample_from_infostate(self, player: int, rng: random.Random) -> "State": ...
 
 class Game(ABC):
     @abstractmethod
