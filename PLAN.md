@@ -139,6 +139,17 @@ perfect vs imperfect info, chance vs no chance. If a new game needs a change
 here, that's a deliberate interface revision (propose it, don't route around
 it — AGENTS.md G8), not a quick patch.
 
+**Information-state contract (all-or-nothing, never in between):** a `State`
+must support both forward simulation and **perfect-recall** information
+states — `information_state_key` encodes the player's full observation
+history (in practice: derive it from an append-only public action log in the
+state, so recall holds by construction, not by hand-picking fields).
+`information_state_tensor` is the single place a lossy fixed-size summary is
+allowed, and each game's RULES.md documents that encoding. Agent-side belief
+models (e.g. the human-like memory design in
+[#12](https://github.com/clee704/meeple/issues/12)) degrade *from* what the
+state encodes; they never substitute for encoding it.
+
 A game opts into the web UI by also registering a **`GameView`**
 (`meeple/framework/view.py`) next to its `Game`: per-player JSON
 `observation` (only what that viewer may see), structured `action_metadata`
