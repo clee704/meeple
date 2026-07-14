@@ -157,13 +157,13 @@ repeat via the onboarding recipe in `AGENTS.md`.
 | 1 | Framework seam | platform | `Game`/`State`/`GameSpec`/registry, native Kuhn poker, `OpenSpielAdapter` (oracle), `random_agent` | [#2](https://github.com/clee704/meeple/issues/2) (closed) |
 | 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | [#3](https://github.com/clee704/meeple/issues/3) (closed) |
 | 3 | Web UI (local) | shell + per-game renderer | `GameView` SPI, game-agnostic FastAPI match backend + React SPA shell, per-game renderers (Kahuna, Kuhn); human-vs-human over LAN | [#4](https://github.com/clee704/meeple/issues/4) |
-| 4 | AI: heuristic + MCTS + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py`, `ai/mcts.py`, `ai/ismcts.py` | [#5](https://github.com/clee704/meeple/issues/5) |
-| 5 | Eval harness | platform | `eval/tournament.py`, `eval/exploitability.py` validated vs OpenSpiel on Kuhn | [#6](https://github.com/clee704/meeple/issues/6) |
+| 4 | AI: heuristic + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py` + per-game evaluation hook, determinization SPI, `ai/ismcts.py`, minimal `eval/tournament.py`, AI seat in web matches. `ai/mcts.py` (plain UCT) deferred to Phase 10 — no perfect-info game to validate it on until then | [#5](https://github.com/clee704/meeple/issues/5) |
+| 5 | Eval harness | platform | extends Phase 4's minimal `eval/tournament.py`; `eval/exploitability.py` validated vs OpenSpiel on Kuhn | [#6](https://github.com/clee704/meeple/issues/6) |
 | 6 | Tabular CFR | platform | `ai/cfr/tabular.py`, validated on native Kuhn | [#7](https://github.com/clee704/meeple/issues/7) |
 | 7 | Coach / explain mode | platform | rank legal moves by win-prob, narrate control changes, `--hint` | [#8](https://github.com/clee704/meeple/issues/8) |
 | 8 | Deep CFR | platform | `ai/cfr/deep_cfr.py`, advantage/strategy nets, external-sampling MCCFR | [#9](https://github.com/clee704/meeple/issues/9) |
 | 9 | Deployment hardening | platform | wait queue, per-IP rate limit, Turnstile, persistent store, Cloudflare Tunnel + systemd (G7 gate before any public exposure) | [#10](https://github.com/clee704/meeple/issues/10) |
-| 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes | [#11](https://github.com/clee704/meeple/issues/11) |
+| 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes; `ai/mcts.py` (UCT, deferred from Phase 4) lands first as its own platform commit | [#11](https://github.com/clee704/meeple/issues/11) |
 | 11 | Polish / deploy | platform | checkpoints, difficulty levels, `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
 
 Status right now: **Phases 0-3 done** (tooling; framework seam, native Kuhn,
@@ -171,7 +171,7 @@ Status right now: **Phases 0-3 done** (tooling; framework seam, native Kuhn,
 `GameView` SPI, FastAPI backend, React frontend with Kahuna/Kuhn renderers,
 human-vs-human over LAN, see #4. The terminal-UI plan was dropped in favor of
 going straight to the web UI; there is no terminal UI). **Phase 4 (AI: heuristic +
-MCTS + ISMCTS) is next** — see [#5](https://github.com/clee704/meeple/issues/5).
+ISMCTS) is next** — see [#5](https://github.com/clee704/meeple/issues/5).
 
 ---
 
