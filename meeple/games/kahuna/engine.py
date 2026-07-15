@@ -35,7 +35,7 @@ with the human via issue #14, rather than guessed:
   exploited to skip repeatedly during normal play.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from functools import cached_property
 
 import torch
@@ -94,6 +94,38 @@ def _remove_first(hand: tuple[str, ...], card: str) -> tuple[str, ...]:
     return tuple(items)
 
 
+_NO_TAKES = ((0,) * NUM_ISLANDS, (0,) * NUM_ISLANDS)
+
+
+@dataclass(frozen=True, eq=False)
+class _LogNode:
+    """One applied action (player or chance) in the public action log — an
+    append-only parent-pointer chain, so appending is O(1) and successive
+    states share structure. Initial state + log determine everything, making
+    the log the state's canonical representation; `KahunaState`'s zone fields
+    are caches derived from it for O(1) simulation. `eq=False` because
+    structural equality would recurse the whole game history and no consumer
+    compares logs; `repr=False` on `parent` keeps state reprs bounded."""
+
+    parent: "_LogNode | None" = field(repr=False)
+    actor: int  # a player index, or CHANCE
+    action: Action  # the player action, or the drawn island's index for chance
+    destination: str | None  # chance only: the pending zone the card went to
+
+    def observed(self, viewer: int) -> str:
+        """What `viewer` sees of this entry — hidden chance outcomes and
+        face-down discard identities are masked per RULES.md's Chance &
+        hidden information section."""
+        if self.actor != CHANCE:
+            if self.action >= DISCARD_BASE and self.actor != viewer:
+                return f"{self.actor}:discard"  # they see *that*, not *what*
+            return f"{self.actor}:{self.action}"
+        card = ISLANDS[self.action]
+        if self.destination.startswith("hand") and self.destination != f"hand{viewer}":
+            return f"chance:{self.destination}"  # the opponent drew *something*
+        return f"chance:{self.destination}={card}"
+
+
 @dataclass(frozen=True)
 class KahunaState(State):
     bridges: tuple[int | None, ...]
@@ -131,6 +163,15 @@ class KahunaState(State):
     # set only draw actions are legal. Public (the discard action itself
     # is visible) and reset when the turn ends.
     discarded_this_turn: bool = False
+    # Face-up takes since the last reshuffle, per player per island: the
+    # tensor's lossy summary of witnessed public takes (see RULES.md's
+    # information-state tensor section). A cache over `log`, like the zones.
+    faceup_takes: tuple[tuple[int, ...], tuple[int, ...]] = _NO_TAKES
+    # The public action log (see _LogNode): exactly one entry per applied
+    # action, appended in apply_action. `information_state_key` is a
+    # per-viewer masked projection of it, so information states are perfect
+    # recall by construction — no field selection can silently coarsen them.
+    log: "_LogNode | None" = field(default=None, repr=False)
 
     # --- derived board queries -------------------------------------------------
 
@@ -236,29 +277,32 @@ class KahunaState(State):
             if not (0 <= action < NUM_ISLANDS) or ISLANDS[action] not in self.pile:
                 legal_chance = [outcome for outcome, _prob in self.chance_outcomes()]
                 raise ValueError(f"illegal chance action {action!r}; legal: {legal_chance}")
-            return self._apply_chance(action)
+            state = self._apply_chance(action)
+            return replace(state, log=_LogNode(self.log, CHANCE, action, self.pending[0]))
 
         legal = self.legal_actions()
         if action not in legal:
             raise ValueError(f"illegal action {action!r}; legal: {legal}")
 
         if PLACE_A_BASE <= action < PLACE_B_BASE:
-            return self._apply_place(action - PLACE_A_BASE, endpoint=0)
-        if PLACE_B_BASE <= action < REMOVE_AA_BASE:
-            return self._apply_place(action - PLACE_B_BASE, endpoint=1)
-        if REMOVE_AA_BASE <= action < REMOVE_BB_BASE:
-            return self._apply_remove(action - REMOVE_AA_BASE, cards="aa")
-        if REMOVE_BB_BASE <= action < REMOVE_AB_BASE:
-            return self._apply_remove(action - REMOVE_BB_BASE, cards="bb")
-        if REMOVE_AB_BASE <= action < DRAW_BLIND:
-            return self._apply_remove(action - REMOVE_AB_BASE, cards="ab")
-        if action == DRAW_BLIND:
-            return replace(self, pending=(f"hand{self.to_move}",), pending_reason="turn")
-        if FACEUP_BASE <= action < SKIP:
-            return self._apply_take_faceup(action - FACEUP_BASE)
-        if action == SKIP:
-            return self._apply_skip()
-        return self._apply_discard_facedown(ISLANDS[action - DISCARD_BASE])
+            state = self._apply_place(action - PLACE_A_BASE, endpoint=0)
+        elif PLACE_B_BASE <= action < REMOVE_AA_BASE:
+            state = self._apply_place(action - PLACE_B_BASE, endpoint=1)
+        elif REMOVE_AA_BASE <= action < REMOVE_BB_BASE:
+            state = self._apply_remove(action - REMOVE_AA_BASE, cards="aa")
+        elif REMOVE_BB_BASE <= action < REMOVE_AB_BASE:
+            state = self._apply_remove(action - REMOVE_BB_BASE, cards="bb")
+        elif REMOVE_AB_BASE <= action < DRAW_BLIND:
+            state = self._apply_remove(action - REMOVE_AB_BASE, cards="ab")
+        elif action == DRAW_BLIND:
+            state = replace(self, pending=(f"hand{self.to_move}",), pending_reason="turn")
+        elif FACEUP_BASE <= action < SKIP:
+            state = self._apply_take_faceup(action - FACEUP_BASE)
+        elif action == SKIP:
+            state = self._apply_skip()
+        else:
+            state = self._apply_discard_facedown(ISLANDS[action - DISCARD_BASE])
+        return replace(state, log=_LogNode(self.log, self.to_move, action, None))
 
     def is_terminal(self) -> bool:
         if self.premature_winner is not None:
@@ -308,26 +352,16 @@ class KahunaState(State):
         return [(ISLANDS.index(island), count / total) for island, count in counts.items()]
 
     def information_state_key(self, player: int) -> str:
-        return repr(
-            (
-                self.bridges,
-                self.face_up,
-                self.discard,
-                self.hidden_discards[player],  # you know your own face-down discards...
-                len(self.hidden_discards[1 - player]),  # ...but only the count of theirs
-                len(self.pile),
-                self.to_move,
-                self.pending_reason if self.pending else None,
-                self.scores,
-                self.scoring_count,
-                self.previous_turn_was_skip,
-                self.final_turns_remaining,
-                self.premature_winner,
-                self.played_card_this_turn,
-                self.discarded_this_turn,
-                tuple(sorted(self.hands[player])),
-            )
-        )
+        # The player's full observation sequence: the initial state is a
+        # constant, so a per-viewer masked projection of the log *is* the
+        # information state, and perfect recall holds by construction.
+        entries: list[str] = []
+        node = self.log
+        while node is not None:
+            entries.append(node.observed(player))
+            node = node.parent
+        entries.reverse()
+        return f"p{player}|" + ";".join(entries)
 
     def information_state_tensor(self, player: int) -> torch.Tensor:
         values: list[float] = []
@@ -349,6 +383,11 @@ class KahunaState(State):
         for island in ISLANDS:
             values.append(float(self.hidden_discards[player].count(island)))
         values.append(float(len(self.hidden_discards[1 - player])))
+        # Witnessed face-up takes since the last reshuffle, viewer first:
+        # the tensor's lossy stand-in for the log's public take history
+        # (RULES.md documents exactly what these counts drop).
+        for who in (player, 1 - player):
+            values.extend(float(count) for count in self.faceup_takes[who])
         values.append(float(len(self.pile)))
         values.append(self.scores[player])
         values.append(self.scores[1 - player])
@@ -438,7 +477,13 @@ class KahunaState(State):
         hands[player] = self.hands[player] + (card,)
         face_up = list(self.face_up)
         face_up[slot] = None
-        state = replace(self, hands=tuple(hands), face_up=tuple(face_up))
+        takes = list(self.faceup_takes[player])
+        takes[ISLANDS.index(card)] += 1
+        faceup_takes = list(self.faceup_takes)
+        faceup_takes[player] = tuple(takes)
+        state = replace(
+            self, hands=tuple(hands), face_up=tuple(face_up), faceup_takes=tuple(faceup_takes)
+        )
         if state.pile:
             return replace(state, pending=(f"faceup{slot}",), pending_reason="turn")
         return state._finish_turn(just_drew=True)
@@ -522,6 +567,7 @@ class KahunaState(State):
             discard=(),
             hidden_discards=((), ()),
             face_up=(None, None, None),
+            faceup_takes=_NO_TAKES,
             pending=tuple(f"faceup{j}" for j in range(num_to_deal)),
             pending_reason="reshuffle",
         )
