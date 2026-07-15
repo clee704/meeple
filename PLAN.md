@@ -100,6 +100,7 @@ breadth. OpenSpiel stays the oracle you cross-check CFR against on Kuhn/Leduc.
 ```python
 # meeple/framework/game.py
 from abc import ABC, abstractmethod
+import random
 import torch
 Action = int
 CHANCE = -1
@@ -121,6 +122,10 @@ class State(ABC):
     def information_state_tensor(self, player: int) -> torch.Tensor: ...  # Deep CFR input
     @abstractmethod
     def information_state_key(self, player: int) -> str: ...    # tabular CFR info-set key
+    # ISMCTS determinization: a full state sampled from the worlds consistent
+    # with `player`'s info set. Perfect-info games `return self` (immutable).
+    @abstractmethod
+    def resample_from_infostate(self, player: int, rng: random.Random) -> "State": ...
 
 class Game(ABC):
     @abstractmethod
@@ -133,6 +138,18 @@ This interface must be general enough for: 2p vs n-player (`returns` is a list),
 perfect vs imperfect info, chance vs no chance. If a new game needs a change
 here, that's a deliberate interface revision (propose it, don't route around
 it — AGENTS.md G8), not a quick patch.
+
+**Information-state contract:** `information_state_key(player)` returns the
+player's full observation history — information states are **perfect
+recall**. Engines derive the key from an append-only action log carried by
+the state (chance outcomes masked per viewer), so recall holds by
+construction; the log is the state's canonical representation, and zone
+fields (hands, piles, board) are caches kept for O(1) simulation.
+`information_state_tensor` is the only place a lossy fixed-size encoding is
+permitted, and each game's RULES.md documents exactly what that encoding
+drops. Agent-side belief models (e.g. difficulty via imperfect memory,
+[#12](https://github.com/clee704/meeple/issues/12)) consume what the state
+encodes; they never substitute for encoding it.
 
 A game opts into the web UI by also registering a **`GameView`**
 (`meeple/framework/view.py`) next to its `Game`: per-player JSON
@@ -157,21 +174,21 @@ repeat via the onboarding recipe in `AGENTS.md`.
 | 1 | Framework seam | platform | `Game`/`State`/`GameSpec`/registry, native Kuhn poker, `OpenSpielAdapter` (oracle), `random_agent` | [#2](https://github.com/clee704/meeple/issues/2) (closed) |
 | 2 | Kahuna engine | per-game | gated on `meeple/games/kahuna/RULES.md`'s 3 open `MUST-VERIFY` items; board graph, engine, cascade, scoring | [#3](https://github.com/clee704/meeple/issues/3) (closed) |
 | 3 | Web UI (local) | shell + per-game renderer | `GameView` SPI, game-agnostic FastAPI match backend + React SPA shell, per-game renderers (Kahuna, Kuhn); human-vs-human over LAN | [#4](https://github.com/clee704/meeple/issues/4) |
-| 4 | AI: heuristic + MCTS + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py`, `ai/mcts.py`, `ai/ismcts.py` | [#5](https://github.com/clee704/meeple/issues/5) |
-| 5 | Eval harness | platform | `eval/tournament.py`, `eval/exploitability.py` validated vs OpenSpiel on Kuhn | [#6](https://github.com/clee704/meeple/issues/6) |
+| 4 | AI: heuristic + ISMCTS | platform | `ai/base.py`, `ai/heuristic.py` + per-game evaluation hook, determinization SPI (`resample_from_infostate`), `ai/ismcts.py`, minimal `eval/tournament.py`, AI seat in web matches | [#5](https://github.com/clee704/meeple/issues/5) |
+| 5 | Eval harness | platform | extends Phase 4's minimal `eval/tournament.py`; `eval/exploitability.py` validated vs OpenSpiel on Kuhn | [#6](https://github.com/clee704/meeple/issues/6) |
 | 6 | Tabular CFR | platform | `ai/cfr/tabular.py`, validated on native Kuhn | [#7](https://github.com/clee704/meeple/issues/7) |
 | 7 | Coach / explain mode | platform | rank legal moves by win-prob, narrate control changes, `--hint` | [#8](https://github.com/clee704/meeple/issues/8) |
 | 8 | Deep CFR | platform | `ai/cfr/deep_cfr.py`, advantage/strategy nets, external-sampling MCCFR | [#9](https://github.com/clee704/meeple/issues/9) |
 | 9 | Deployment hardening | platform | wait queue, per-IP rate limit, Turnstile, persistent store, Cloudflare Tunnel + systemd (G7 gate before any public exposure) | [#10](https://github.com/clee704/meeple/issues/10) |
-| 10 | Second game (reuse proof) | per-game | Quarto or Patchwork via the recipe, zero core changes | [#11](https://github.com/clee704/meeple/issues/11) |
-| 11 | Polish / deploy | platform | checkpoints, difficulty levels, `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
+| 10 | Second game (reuse proof) | per-game | preceded by `ai/mcts.py` (plain UCT — needs this phase's perfect-info game to validate) as its own platform commit; then Quarto or Patchwork via the recipe, zero core changes | [#11](https://github.com/clee704/meeple/issues/11) |
+| 11 | Polish / deploy | platform | checkpoints, difficulty levels (simulation budget + human-like imperfect-memory models — design sketched in #12), `--watch`, monitoring | [#12](https://github.com/clee704/meeple/issues/12) |
 
 Status right now: **Phases 0-3 done** (tooling; framework seam, native Kuhn,
 `OpenSpielAdapter`, `random_agent`; Kahuna engine merged in #15; web UI —
 `GameView` SPI, FastAPI backend, React frontend with Kahuna/Kuhn renderers,
 human-vs-human over LAN, see #4. The terminal-UI plan was dropped in favor of
 going straight to the web UI; there is no terminal UI). **Phase 4 (AI: heuristic +
-MCTS + ISMCTS) is next** — see [#5](https://github.com/clee704/meeple/issues/5).
+ISMCTS) is next** — see [#5](https://github.com/clee704/meeple/issues/5).
 
 ---
 
