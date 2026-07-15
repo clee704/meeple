@@ -6,7 +6,7 @@ import random
 
 import torch
 
-from meeple.ai.random_agent import play_to_terminal, select_action
+from meeple.ai.random_agent import RandomAgent, play_to_terminal
 from meeple.framework.game import CHANCE, Action, State
 
 
@@ -49,7 +49,16 @@ class _CoinFlipState(State):
 def test_select_action_picks_a_legal_action():
     state = _CoinFlipState(flip=0)
     rng = random.Random(0)
-    assert select_action(state, rng) in state.legal_actions()
+    assert RandomAgent().select_action(state, rng) in state.legal_actions()
+
+
+def test_select_action_is_deterministic_under_a_fixed_seed():
+    state = _CoinFlipState(flip=0)
+    picks = [
+        [RandomAgent().select_action(state, rng) for _ in range(20)]
+        for rng in (random.Random(7), random.Random(7))
+    ]
+    assert picks[0] == picks[1]
 
 
 def test_play_to_terminal_resolves_chance_and_reaches_terminal():
