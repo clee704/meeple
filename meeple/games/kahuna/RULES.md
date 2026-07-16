@@ -315,7 +315,8 @@ are legal until the turn ends.
 The tensor is the **single sanctioned lossy encoding** of a player's
 information state — fixed-size nets require one; `information_state_key`
 stays exact (the full observation sequence, per Chance & hidden
-information above). Fields, all from the viewer's perspective:
+information above). Fields, from the viewer's perspective except where
+noted:
 
 - per-bridge owner, one-hot over free / yours / opponent's (27 × 3);
 - per-island controller, one-hot over nobody / you / opponent (12 × 3);
@@ -330,8 +331,10 @@ information above). Fields, all from the viewer's perspective:
 - draw-pile size (1); your score, then the opponent's (2); how many
   scorings have triggered (1); whether the previous turn was a skip (1);
   final-phase turns remaining, or −1 before the final phase (1); whether
-  you've already played a card this turn (1); whether a hand-limit
-  discard has committed you to drawing this turn (1).
+  the player to move has already played a card this turn (1); whether a
+  hand-limit discard has committed the player to move to drawing this
+  turn (1) — these last two are mover-scoped, not viewer-scoped: queried
+  off-turn, they describe the opponent's turn in progress.
 
 What this encoding **drops**, relative to the exact observation sequence:
 
@@ -342,7 +345,17 @@ What this encoding **drops**, relative to the exact observation sequence:
   then and never openly played may still be sitting in the opponent's
   hand;
 - which openly played cards paid for which move, beyond what the discard
-  pile and board still show.
+  pile and board still show;
+- skip history beyond the immediately preceding turn — only "was the
+  previous turn a skip" is encoded, though every skip is a public event
+  and earlier ones carry opponent-model information;
+- past board configurations — the board appears only as its current
+  bridges and control; which bridges once existed and were later removed
+  survives only in what the discard pile still shows;
+- whose turn it is, and whether a chance resolution is pending — the
+  tensor is meant to be queried at the viewer's own decision nodes (as
+  Deep CFR does), where both are implied; an off-turn consumer would get
+  turn-ambiguous inputs.
 
 Anything that needs exactness — the tabular info-set key, the ISMCTS
 determinizer — must consume the log, never this tensor.

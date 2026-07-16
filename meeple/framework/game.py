@@ -45,10 +45,13 @@ class State(ABC):
     @abstractmethod
     def information_state_key(self, player: int) -> str:
         """Tabular CFR info-set key: `player`'s full observation history.
-        Information states are perfect recall — engines derive this from an
-        append-only action log carried by the state (chance outcomes masked
-        per viewer), never from hand-picked state fields, so recall holds by
-        construction."""
+        The contract is perfect recall — the key encodes everything `player`
+        has observed (all public actions, plus chance outcomes and hidden
+        actions masked per viewer), never a lossy snapshot of current zones.
+        For games whose state fields don't already spell out that history,
+        the recommended construction is a per-viewer masked projection of an
+        append-only action log carried by the state, so recall holds by
+        construction rather than by field selection."""
 
 
 class Game(ABC):
