@@ -110,7 +110,12 @@ class _LogNode:
     parent: "_LogNode | None" = field(repr=False)
     actor: int  # a player index, or CHANCE
     action: Action  # the player action, or the drawn island's index for chance
-    destination: str | None  # chance only: the pending zone the card went to
+    # Chance only: the pending zone the card went to, prefixed "reshuffle:"
+    # when the deal restocks the face-up row after a scoring — so log
+    # consumers (the ISMCTS determinizer, memory models) can read reshuffle
+    # boundaries directly instead of re-deriving depletion logic from zone
+    # counts folded over the whole log.
+    destination: str | None
 
     def observed(self, viewer: int) -> str:
         """What `viewer` sees of this entry — hidden chance outcomes and
@@ -278,7 +283,10 @@ class KahunaState(State):
                 legal_chance = [outcome for outcome, _prob in self.chance_outcomes()]
                 raise ValueError(f"illegal chance action {action!r}; legal: {legal_chance}")
             state = self._apply_chance(action)
-            return replace(state, log=_LogNode(self.log, CHANCE, action, self.pending[0]))
+            destination = self.pending[0]
+            if self.pending_reason == "reshuffle":
+                destination = f"reshuffle:{destination}"
+            return replace(state, log=_LogNode(self.log, CHANCE, action, destination))
 
         legal = self.legal_actions()
         if action not in legal:

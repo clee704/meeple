@@ -648,10 +648,26 @@ def test_witnessed_faceup_take_is_remembered_after_it_leaves_the_board():
     )
 
 
+# Offset of the faceup_takes block in the information-state tensor:
+# bridges (27 x 3) + island control (12 x 3) + hand / face-up / open discard /
+# own hidden discards (4 x 12) + the opponent's hidden-discard count (1).
+_TAKES_OFFSET = NUM_BRIDGES * 3 + 7 * len(ISLANDS) + 1
+
+
 def test_faceup_takes_are_counted_until_a_reshuffle_resets_them():
     state = _state(face_up=("ALOA", None, None), pile=("BARI", "COCO"), to_move=1)
     taken = state.apply_action(FACEUP_BASE + 0)
-    assert taken.faceup_takes[1][ISLANDS.index("ALOA")] == 1
+    aloa = ISLANDS.index("ALOA")
+    assert taken.faceup_takes[1][aloa] == 1
+    # The tensor orders the two count blocks viewer-first: the taker
+    # (player 1) carries the take in the "yours" sub-block, the other
+    # viewer in the "opponent's" one — pinned by index so a perspective
+    # swap can't slip through.
+    yours, theirs = _TAKES_OFFSET + aloa, _TAKES_OFFSET + len(ISLANDS) + aloa
+    assert taken.information_state_tensor(1)[yours] == 1.0
+    assert taken.information_state_tensor(1)[theirs] == 0.0
+    assert taken.information_state_tensor(0)[theirs] == 1.0
+    assert taken.information_state_tensor(0)[yours] == 0.0
 
     # A take that empties both pile and slots triggers scoring + reshuffle,
     # which resets the counts along with the other per-round zones.
@@ -667,9 +683,28 @@ def test_faceup_takes_are_counted_until_a_reshuffle_resets_them():
     assert after.faceup_takes == ((0,) * len(ISLANDS), (0,) * len(ISLANDS))
 
 
+def test_reshuffle_redeals_are_tagged_in_the_information_state_key():
+    # The one case where a re-deal's log entries are otherwise byte-identical
+    # to an ordinary post-take refill: a slot-0 take that triggers scoring
+    # with a 1-card reconstructed pile. The "reshuffle:" destination tag is
+    # what keeps the two histories apart, so log consumers can read
+    # reshuffle boundaries without folding zone counts over the whole log.
+    scoring = _state(face_up=("DUDA", None, None), pile=(), discard=("ELAI",), to_move=1)
+    scoring = _resolve_chance_with(scoring.apply_action(FACEUP_BASE + 0), "ELAI")
+    assert scoring.scoring_count == 1
+    ordinary = _state(face_up=("DUDA", None, None), pile=("ELAI",), to_move=1)
+    ordinary = _resolve_chance_with(ordinary.apply_action(FACEUP_BASE + 0), "ELAI")
+    assert "chance:reshuffle:faceup0=ELAI" in scoring.information_state_key(0)
+    assert "chance:faceup0=ELAI" in ordinary.information_state_key(0)
+    assert scoring.information_state_key(0) != ordinary.information_state_key(0)
+
+
 def test_information_state_tensor_shape_is_stable():
+    # The length is pinned so adding/removing a field shows up as a
+    # deliberate diff here, not a silent shape change under a consumer.
     state = _state(hands=(("ALOA",), ()))
-    assert state.information_state_tensor(0).shape == state.information_state_tensor(1).shape
+    assert state.information_state_tensor(0).shape == (198,)
+    assert state.information_state_tensor(1).shape == (198,)
 
 
 def test_played_card_this_turn_is_tracked_and_visible_in_information_state():
