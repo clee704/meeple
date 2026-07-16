@@ -289,19 +289,21 @@ def test_facedown_discard_illegal_when_there_is_nothing_to_draw():
 
 def test_facedown_discard_identity_is_hidden_from_opponent_but_not_self():
     # Same number of face-down discards, different specific cards: the
-    # opponent sees only the count (comparable to pile size), but the
-    # discarder keeps seeing their own card -- collapsing it would merge
-    # information states the acting player can tell apart (imperfect
+    # opponent sees only that a discard happened (comparable to pile size),
+    # but the discarder keeps seeing their own card -- collapsing it would
+    # merge information states the acting player can tell apart (imperfect
     # recall, which corrupts CFR/ISMCTS).
-    aloa = _state(hidden_discards=(("ALOA",), ()))
-    bari = _state(hidden_discards=(("BARI",), ()))
+    full_hand = ("ALOA", "BARI", "COCO", "DUDA", "ELAI")
+    base = _state(hands=(full_hand, ()), pile=("FAAA",))
+    aloa = base.apply_action(DISCARD_BASE + ISLANDS.index("ALOA"))
+    bari = base.apply_action(DISCARD_BASE + ISLANDS.index("BARI"))
     assert aloa.information_state_key(1) == bari.information_state_key(1)
     assert aloa.information_state_tensor(1).tolist() == bari.information_state_tensor(1).tolist()
     assert aloa.information_state_key(0) != bari.information_state_key(0)
     assert aloa.information_state_tensor(0).tolist() != bari.information_state_tensor(0).tolist()
 
-    # A different *count* is a genuinely different, visible state.
-    two_hidden = _state(hidden_discards=(("ALOA", "BARI"), ()))
+    # A *second* discard is a different, visible event even to the opponent.
+    two_hidden = aloa.apply_action(DISCARD_BASE + ISLANDS.index("COCO"))
     assert aloa.information_state_key(1) != two_hidden.information_state_key(1)
 
 
@@ -604,15 +606,105 @@ def test_spec_matches_rules_md():
     assert spec.num_distinct_actions == 152
 
 
-def test_information_state_key_hides_opponent_hand():
-    a = _state(hands=(("ALOA",), ("BARI",)))
-    b = _state(hands=(("ALOA",), ("COCO",)))
-    assert a.information_state_key(0) == b.information_state_key(0)
+def _resolve_chance_with(state: KahunaState, *islands: str) -> KahunaState:
+    for island in islands:
+        state = state.apply_action(ISLANDS.index(island))
+    return state
+
+
+def test_information_state_key_hides_opponent_blind_draws():
+    # Which card the opponent drew blind (and so what's now in their hand)
+    # must not leak into the viewer's key -- but the drawer sees it.
+    base = _state(pile=("BARI", "COCO"), to_move=1).apply_action(DRAW_BLIND)
+    bari = _resolve_chance_with(base, "BARI")
+    coco = _resolve_chance_with(base, "COCO")
+    assert bari.information_state_key(0) == coco.information_state_key(0)
+    assert bari.information_state_key(1) != coco.information_state_key(1)
+
+
+def test_witnessed_faceup_take_is_remembered_after_it_leaves_the_board():
+    # Perfect recall: *which* face-up card the opponent took stays part of
+    # the viewer's information even once the slot is refilled and the card
+    # sits hidden in the opponent's hand -- a zone-snapshot key would merge
+    # these two histories. The tensor carries it as per-island take counts.
+    def play(faceup0: str) -> KahunaState:
+        state = KahunaGame().new_initial_state()
+        state = _resolve_chance_with(
+            state, "DUDA", "DUDA", "ELAI", "FAAA", "FAAA", "GOLA", faceup0, "HUNA", "IFFI"
+        )
+        state = state.apply_action(SKIP)  # player 0
+        state = state.apply_action(FACEUP_BASE + 0)  # player 1 takes the slot-0 card
+        return _resolve_chance_with(state, "COCO")  # both slots refill identically
+
+    took_aloa, took_bari = play("ALOA"), play("BARI")
+    # Every zone player 0 can see directly ends up identical...
+    assert took_aloa.face_up == took_bari.face_up
+    assert took_aloa.hands[0] == took_bari.hands[0]
+    # ...but player 0 witnessed a different take and must remember it.
+    assert took_aloa.information_state_key(0) != took_bari.information_state_key(0)
+    assert (
+        took_aloa.information_state_tensor(0).tolist()
+        != took_bari.information_state_tensor(0).tolist()
+    )
+
+
+# Offset of the faceup_takes block in the information-state tensor:
+# bridges (27 x 3) + island control (12 x 3) + hand / face-up / open discard /
+# own hidden discards (4 x 12) + the opponent's hidden-discard count (1).
+_TAKES_OFFSET = NUM_BRIDGES * 3 + 7 * len(ISLANDS) + 1
+
+
+def test_faceup_takes_are_counted_until_a_reshuffle_resets_them():
+    state = _state(face_up=("ALOA", None, None), pile=("BARI", "COCO"), to_move=1)
+    taken = state.apply_action(FACEUP_BASE + 0)
+    aloa = ISLANDS.index("ALOA")
+    assert taken.faceup_takes[1][aloa] == 1
+    # The tensor orders the two count blocks viewer-first: the taker
+    # (player 1) carries the take in the "yours" sub-block, the other
+    # viewer in the "opponent's" one — pinned by index so a perspective
+    # swap can't slip through.
+    yours, theirs = _TAKES_OFFSET + aloa, _TAKES_OFFSET + len(ISLANDS) + aloa
+    assert taken.information_state_tensor(1)[yours] == 1.0
+    assert taken.information_state_tensor(1)[theirs] == 0.0
+    assert taken.information_state_tensor(0)[theirs] == 1.0
+    assert taken.information_state_tensor(0)[yours] == 0.0
+
+    # A take that empties both pile and slots triggers scoring + reshuffle,
+    # which resets the counts along with the other per-round zones.
+    last = _state(
+        face_up=("DUDA", None, None),
+        pile=(),
+        discard=("ELAI",),
+        faceup_takes=taken.faceup_takes,
+        to_move=1,
+    )
+    after = last.apply_action(FACEUP_BASE + 0)
+    assert after.scoring_count == 1
+    assert after.faceup_takes == ((0,) * len(ISLANDS), (0,) * len(ISLANDS))
+
+
+def test_reshuffle_redeals_are_tagged_in_the_information_state_key():
+    # The one case where a re-deal's log entries are otherwise byte-identical
+    # to an ordinary post-take refill: a slot-0 take that triggers scoring
+    # with a 1-card reconstructed pile. The "reshuffle:" destination tag is
+    # what keeps the two histories apart, so log consumers can read
+    # reshuffle boundaries without folding zone counts over the whole log.
+    scoring = _state(face_up=("DUDA", None, None), pile=(), discard=("ELAI",), to_move=1)
+    scoring = _resolve_chance_with(scoring.apply_action(FACEUP_BASE + 0), "ELAI")
+    assert scoring.scoring_count == 1
+    ordinary = _state(face_up=("DUDA", None, None), pile=("ELAI",), to_move=1)
+    ordinary = _resolve_chance_with(ordinary.apply_action(FACEUP_BASE + 0), "ELAI")
+    assert "chance:reshuffle:faceup0=ELAI" in scoring.information_state_key(0)
+    assert "chance:faceup0=ELAI" in ordinary.information_state_key(0)
+    assert scoring.information_state_key(0) != ordinary.information_state_key(0)
 
 
 def test_information_state_tensor_shape_is_stable():
+    # The length is pinned so adding/removing a field shows up as a
+    # deliberate diff here, not a silent shape change under a consumer.
     state = _state(hands=(("ALOA",), ()))
-    assert state.information_state_tensor(0).shape == state.information_state_tensor(1).shape
+    assert state.information_state_tensor(0).shape == (198,)
+    assert state.information_state_tensor(1).shape == (198,)
 
 
 def test_played_card_this_turn_is_tracked_and_visible_in_information_state():

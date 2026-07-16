@@ -202,6 +202,18 @@ tokens per player, in total. Running out limits what you can still play.
   your own draw, or as the automatic refill after someone takes a face-up
   card. Taking a specific face-up card is a visible, deliberate choice, not
   a random event.
+- **Memory (perfect recall)**: public events stay part of a player's
+  information even after they stop being visible on the board — e.g.
+  *which* face-up card the opponent took three turns ago, now hidden in
+  their hand. A player's information state is their full observation
+  sequence: every action either player took, plus chance outcomes masked
+  per viewer (your own blind draws by identity, the opponent's only as
+  "drew a card"; likewise your own face-down discards by identity, the
+  opponent's only as "discarded a card"). The engine carries this as an
+  append-only public action log on the state and derives
+  `information_state_key` from it, so perfect recall holds by
+  construction; the fixed-size tensor below is the single sanctioned
+  lossy summary of that sequence.
 
 ## Terminal conditions & scoring
 
@@ -300,15 +312,53 @@ are legal until the turn ends.
 
 ## Information-state tensor (for Deep CFR)
 
-Per-bridge owner (3 possibilities × P positions) · per-island control,
-degree, and each player's bridge count there · your hand, counted per
-island (12 numbers) · the 3 public face-up cards · cards seen/discarded so
-far this round (your own face-down discards by identity, the opponent's
-only by count — see Chance & hidden information) · bridges/tokens
-remaining · which round it is · scores · whether you've already played a
-card this turn · whether your hand-limit discard has just committed you to
-drawing · whether the opponent skipped their last turn (so you know if
-skipping is legal for you).
+The tensor is the **single sanctioned lossy encoding** of a player's
+information state — fixed-size nets require one; `information_state_key`
+stays exact (the full observation sequence, per Chance & hidden
+information above). Fields, from the viewer's perspective except where
+noted:
+
+- per-bridge owner, one-hot over free / yours / opponent's (27 × 3);
+- per-island controller, one-hot over nobody / you / opponent (12 × 3);
+- your hand, counted per island (12);
+- the current face-up cards, counted per island (12);
+- the open discard pile, counted per island (12);
+- your own face-down discards, counted per island (12), and the *count*
+  of the opponent's face-down discards (1) — see Chance & hidden
+  information;
+- face-up takes since the last reshuffle, counted per island, yours then
+  the opponent's (2 × 12);
+- draw-pile size (1); your score, then the opponent's (2); how many
+  scorings have triggered (1); whether the previous turn was a skip (1);
+  final-phase turns remaining, or −1 before the final phase (1); whether
+  the player to move has already played a card this turn (1); whether a
+  hand-limit discard has committed the player to move to drawing this
+  turn (1) — these last two are mover-scoped, not viewer-scoped: queried
+  off-turn, they describe the opponent's turn in progress.
+
+What this encoding **drops**, relative to the exact observation sequence:
+
+- the order/interleaving of events — e.g. whether an opponent's face-down
+  discard happened before or after a witnessed face-up take, which
+  changes what that discard could have been;
+- face-up takes witnessed before the most recent reshuffle — a card taken
+  then and never openly played may still be sitting in the opponent's
+  hand;
+- which openly played cards paid for which move, beyond what the discard
+  pile and board still show;
+- skip history beyond the immediately preceding turn — only "was the
+  previous turn a skip" is encoded, though every skip is a public event
+  and earlier ones carry opponent-model information;
+- past board configurations — the board appears only as its current
+  bridges and control; which bridges once existed and were later removed
+  survives only in what the discard pile still shows;
+- whose turn it is, and whether a chance resolution is pending — the
+  tensor is meant to be queried at the viewer's own decision nodes (as
+  Deep CFR does), where both are implied; an off-turn consumer would get
+  turn-ambiguous inputs.
+
+Anything that needs exactness — the tabular info-set key, the ISMCTS
+determinizer — must consume the log, never this tensor.
 
 ## Worked example
 

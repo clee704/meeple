@@ -38,11 +38,20 @@ class State(ABC):
 
     @abstractmethod
     def information_state_tensor(self, player: int) -> torch.Tensor:
-        """Deep CFR input: everything `player` can observe, encoded as a tensor."""
+        """Deep CFR input: what `player` observes, as a fixed-size tensor.
+        The one place a lossy encoding is sanctioned — each game's RULES.md
+        documents exactly what its encoding drops."""
 
     @abstractmethod
     def information_state_key(self, player: int) -> str:
-        """Tabular CFR info-set key: a hashable summary of what `player` observes."""
+        """Tabular CFR info-set key: `player`'s full observation history.
+        The contract is perfect recall — the key encodes everything `player`
+        has observed (all public actions, plus chance outcomes and hidden
+        actions masked per viewer), never a lossy snapshot of current zones.
+        For games whose state fields don't already spell out that history,
+        the recommended construction is a per-viewer masked projection of an
+        append-only action log carried by the state, so recall holds by
+        construction rather than by field selection."""
 
 
 class Game(ABC):
