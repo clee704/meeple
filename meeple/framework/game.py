@@ -2,6 +2,7 @@
 should depend only on this module (plus `spec.py`/`registry.py`) to reach a
 game — never on a specific game's package."""
 
+import random
 from abc import ABC, abstractmethod
 
 import torch
@@ -52,6 +53,19 @@ class State(ABC):
         the recommended construction is a per-viewer masked projection of an
         append-only action log carried by the state, so recall holds by
         construction rather than by field selection."""
+
+    @abstractmethod
+    def resample_from_infostate(self, player: int, rng: random.Random) -> "State":
+        """ISMCTS determinization: a full state drawn from the worlds
+        consistent with `player`'s information state — the sampled state's
+        `information_state_key(player)` must equal this state's. Hidden
+        chance outcomes are re-sampled from their distribution conditioned
+        on `player`'s observations; where an *opponent decision* hides an
+        identity (not chance — e.g. which card a face-down discard was),
+        sampling is uniform over the consistent choices, never from an
+        opponent model. Belief-weighted determinization belongs in `ai/`,
+        layered on top of this chance-correct sampler. Perfect-info games
+        return `self` (states are immutable)."""
 
 
 class Game(ABC):

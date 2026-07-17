@@ -111,3 +111,29 @@ def test_information_state_tensor_shape():
     state = _deal(0, 1, history="pb")
     tensor = state.information_state_tensor(0)
     assert tensor.shape == (9,)
+
+
+@pytest.mark.parametrize("viewer", [0, 1])
+def test_resample_preserves_the_viewers_information_state(viewer):
+    state = _deal(0, 1, history="pb")
+    sample = state.resample_from_infostate(viewer, random.Random(0))
+    assert sample.information_state_key(viewer) == state.information_state_key(viewer)
+
+
+def test_resample_covers_both_unseen_opponent_cards():
+    state = _deal(0, 1, history="b")
+    sampled = {
+        state.resample_from_infostate(0, random.Random(seed))._cards[1] for seed in range(40)
+    }
+    assert sampled == {1, 2}  # everything but player 0's own card
+
+
+def test_resample_is_deterministic_under_a_fixed_seed():
+    state = _deal(2, 0, history="p")
+    cards = [state.resample_from_infostate(1, random.Random(5))._cards for _ in range(2)]
+    assert cards[0] == cards[1]
+
+
+def test_resample_before_the_deal_returns_self():
+    state = KuhnGame().new_initial_state()
+    assert state.resample_from_infostate(0, random.Random(0)) is state

@@ -43,6 +43,9 @@ class _ThreeSeatState(State):
     def information_state_key(self, player: int) -> str:
         return f"p{player}"
 
+    def resample_from_infostate(self, player: int, rng: random.Random) -> State:
+        return self
+
 
 class _ThreeSeatGame(Game):
     def new_initial_state(self) -> State:

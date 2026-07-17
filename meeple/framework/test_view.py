@@ -2,6 +2,8 @@
 `result` logic. Per-game conformance (observations serialize, metadata covers
 every legal action, privacy) lives with each game's view tests."""
 
+import random
+
 import pytest
 import torch
 
@@ -38,6 +40,9 @@ class _StubState(State):
 
     def information_state_tensor(self, player: int) -> torch.Tensor:
         return torch.zeros(1)
+
+    def resample_from_infostate(self, player: int, rng: random.Random) -> State:
+        return self
 
 
 class _StubGame(Game):
