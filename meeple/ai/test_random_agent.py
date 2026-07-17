@@ -45,6 +45,9 @@ class _CoinFlipState(State):
     def information_state_tensor(self, player: int) -> torch.Tensor:
         return torch.zeros(1)
 
+    def resample_from_infostate(self, player: int, rng: random.Random) -> State:
+        return self
+
 
 def test_select_action_picks_a_legal_action():
     state = _CoinFlipState(flip=0)

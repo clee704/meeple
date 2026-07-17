@@ -1,6 +1,7 @@
 """Native Kuhn poker engine — exercises the `Game`/`State` interface with zero
 OpenSpiel dependency. Rules: `meeple/games/kuhn/RULES.md`."""
 
+import random
 from itertools import permutations
 
 import torch
@@ -80,6 +81,16 @@ class KuhnState(State):
     def information_state_key(self, player: int) -> str:
         card = self._cards[player]
         return f"{card}:{self._history}"
+
+    def resample_from_infostate(self, player: int, rng: random.Random) -> "KuhnState":
+        if self._cards is None:
+            return self  # nothing dealt yet, so nothing is hidden from anyone
+        # `player` knows their own card and the betting history; the only
+        # hidden information is the opponent's card, uniform over the rest.
+        own = self._cards[player]
+        other = rng.choice([card for card in range(NUM_CARDS) if card != own])
+        cards = (own, other) if player == 0 else (other, own)
+        return KuhnState(cards=cards, history=self._history)
 
     def information_state_tensor(self, player: int) -> torch.Tensor:
         # one-hot card (3) + one-hot history (length up to 3, 2 symbols) -> length 9

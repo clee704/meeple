@@ -35,6 +35,7 @@ with the human via issue #14, rather than guessed:
   exploited to skip repeatedly during normal play.
 """
 
+import random
 from dataclasses import dataclass, field, replace
 from functools import cached_property
 
@@ -370,6 +371,12 @@ class KahunaState(State):
             node = node.parent
         entries.reverse()
         return f"p{player}|" + ";".join(entries)
+
+    def resample_from_infostate(self, player: int, rng: random.Random) -> "KahunaState":
+        # Deferred import: determinize.py needs this module's classes.
+        from meeple.games.kahuna.determinize import resample_from_infostate
+
+        return resample_from_infostate(self, player, rng)
 
     def information_state_tensor(self, player: int) -> torch.Tensor:
         values: list[float] = []

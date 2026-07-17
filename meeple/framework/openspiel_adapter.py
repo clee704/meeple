@@ -5,6 +5,8 @@ as a game backend for play/eval/web. `open-spiel` is an optional dependency —
 import this module lazily, only where the cross-check happens.
 """
 
+import random
+
 import pyspiel
 import torch
 
@@ -42,6 +44,15 @@ class OpenSpielState(State):
 
     def information_state_tensor(self, player: int) -> torch.Tensor:
         return torch.tensor(self._state.information_state_tensor(player), dtype=torch.float32)
+
+    def resample_from_infostate(self, player: int, rng: random.Random) -> "OpenSpielState":
+        # pyspiel wants a 0-arg uniform-[0,1) sampler instead of an rng.
+        try:
+            return OpenSpielState(self._state.resample_from_infostate(player, rng.random))
+        except pyspiel.SpielError as error:
+            raise NotImplementedError(
+                f"the wrapped OpenSpiel game does not implement resample_from_infostate: {error}"
+            ) from error
 
 
 class OpenSpielGame(Game):

@@ -39,6 +39,9 @@ class _TwoFlipState(State):
     def information_state_tensor(self, player: int) -> torch.Tensor:
         return torch.zeros(1)
 
+    def resample_from_infostate(self, player: int, rng: random.Random) -> State:
+        return self
+
 
 def test_sample_chance_follows_the_distribution():
     rng = random.Random(0)
